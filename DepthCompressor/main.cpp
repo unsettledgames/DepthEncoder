@@ -13,77 +13,9 @@
 #include <cmath>
 #include <math.h>
 
-#include <jpeg_encoder.h>
-#include <jpeg_decoder.h>
+#include <depthencoder.h>
 
 using namespace std;
-
-// TODO: hilbert & morton
-void dumpImageQuantized(QString name, std::vector<float> &buffer, int width, int height, double cellsize)
-{
-    float min = 1e20;
-    float max = -1e20;
-    for(float f: buffer) {
-        min = std::min(f, min);
-        max = std::max(f, max);
-    }
-
-    cout << "Min: " << min << " max:" << max << " steps: " << (max - min)/0.01 << endl;
-
-    //highp float val = texture2d(samplerTop8bits, tex_coord) * (256.0 / 257.0);
-    //val += texture2d(samplerBottom8bits, tex_coord) * (1.0 / 257.0);
-
-    QImage img(width, height, QImage::Format_RGB32);
-
-    for(int y = 0; y < height; y++) {
-        for(int x = 0; x < width; x++) {
-            float h = buffer[x + y*width];
-            h = (h-min)/(max - min);
-            //quantize to 65k
-            int height = floor(h*65535);
-            int r = height/256;
-            int g = height/256;
-            int b = height/256;
-            img.setPixel(x, y, qRgb(r, g, b));
-        }
-    }
-    img.save(name);
-    QFile info("info.json");
-    if(!info.open(QFile::WriteOnly))
-        throw "Failed writing info.json";
-
-    QTextStream stream(&info);
-    stream << "{\n"
-    << "width: " << width << ",\n"
-    << "heigh: " << height << ",\n"
-    << "type: \"dem\"\n"
-    << "cellsize: " << cellsize << ",\n"
-    << "min: " << min << ",\n"
-    << "max: " << max << "\n"
-    << "}\n";
-}
-
-
-void dumpImageJPEG(QString src, QString dest, int compression)
-{
-    QImage sourceImage(src);
-    JpegEncoder encoder;
-    uint8_t* retBuffer = new uint8_t[sourceImage.width() * sourceImage.height() * 3];
-    unsigned long retSize;
-    sourceImage = sourceImage.convertToFormat(QImage::Format_RGB888);
-
-    encoder.setJpegColorSpace(J_COLOR_SPACE::JCS_RGB);
-    encoder.setQuality(compression);
-
-    encoder.init(dest.toStdString().c_str(), sourceImage.width(), sourceImage.height(), &retBuffer, &retSize);
-    encoder.writeRows(sourceImage.bits(), sourceImage.height());
-    encoder.finish();
-
-    QFile out(dest);
-    out.open(QIODevice::WriteOnly);
-    out.write((const char*)retBuffer, retSize);
-    out.close();
-}
 
 void decodeImage(QString filePath, QString jsonPath) {
     QJsonDocument doc;
@@ -145,13 +77,12 @@ void decodeImage(QString filePath, QString jsonPath) {
 using namespace std;
 int main(int argc, char *argv[])
 {
-    bool decode = false;
-    bool encodeJpeg = true;
+    DepthEncoder::Encoder encoder(argv[1]);
+    DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::TRIANGLE, 5, false);
 
-    if (encodeJpeg) {
-        dumpImageJPEG("elevation3.png", "elevation3compressed.jpg", 50);
-        return 0;
-    }
+    encoder.Encode("elevation3.jpg", props);
+
+    bool decode = false;
 
     if (decode) {
         decodeImage("elevation3.png", "info.json");
@@ -161,7 +92,5 @@ int main(int argc, char *argv[])
     // Save output images
     //dumpImage("slope.png", slopes, ncols-2, nrows-2);
     //dumpImage("aspect.png", aspects, ncols-2, nrows-2);
-    dumpImageQuantized("elevation_quantized.png", heights, ncols, nrows, cellsize);
-
     return 0;
 }
