@@ -15,6 +15,13 @@
 
 #include <depthencoder.h>
 
+/** TODO
+ *  - Write encoding type in json file
+ *  - Add hilbert / morton
+ *  - Add decoder
+ *  - Add error calculator
+ */
+
 using namespace std;
 
 void decodeImage(QString filePath, QString jsonPath) {
@@ -78,9 +85,9 @@ using namespace std;
 int main(int argc, char *argv[])
 {
     DepthEncoder::Encoder encoder(argv[1]);
-    DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::TRIANGLE, 5, false);
+    DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::MORTON, 100, false);
 
-    encoder.Encode("elevation3.jpg", props);
+    encoder.Encode("elevation3Morton.jpg", props);
 
     bool decode = false;
 

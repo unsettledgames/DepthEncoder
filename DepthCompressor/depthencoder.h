@@ -29,12 +29,16 @@ namespace DepthEncoder
         void Encode(const QString& outPath, const EncodingProperties& props);
 
     private:
+        template <typename intcode_t> constexpr int CurveOrder() { return (sizeof(intcode_t) * 8) / 3; }
         void SaveJPEG(const QString& path, const QImage& img, uint32_t quality);
 
         std::vector<QImage> EncodeNone(bool splitChannels);
         std::vector<QImage> EncodeTriangle(bool splitChannels);
         std::vector<QImage> EncodeMorton(bool splitChannels);
         std::vector<QImage> EncodeHilbert(bool splitChannels);
+
+        std::vector<uint8_t> MortonToVec(uint16_t point);
+        std::vector<uint8_t> HilbertToVec(uint16_t point);
 
     private:
         QString m_Path;
