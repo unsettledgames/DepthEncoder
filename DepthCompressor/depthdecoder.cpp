@@ -4,6 +4,45 @@
 
 namespace DepthEncoder
 {
+    static int GetMortonCode(int r, int g, int b, int nbits)
+    {
+        int codex = 0, codey = 0, codez = 0;
+
+        const int nbits2 = 2 * nbits;
+
+        for (int i = 0, andbit = 1; i < nbits2; i += 2, andbit <<= 1) {
+            codex |= (int)(r & andbit) << i;
+            codey |= (int)(g & andbit) << i;
+            codez |= (int)(b & andbit) << i;
+        }
+
+        return ((codez << 2) | (codey << 1) | codex);
+    }
+
+    static void TransposeToHilbertCoords(int* X, int nbits, int dim)
+    {
+        uint32_t M = 1 << (nbits - 1), P, Q, t;
+
+        // Inverse undo
+        for (Q = M; Q > 1; Q >>= 1) {
+            P = Q - 1;
+            for (int i = 0; i < dim; i++)
+                if (X[i] & Q) // Invert
+                    X[0] ^= P;
+                else { // Exchange
+                    t = (X[0] ^ X[i]) & P;
+                    X[0] ^= t;
+                    X[i] ^= t;
+                }
+        }
+
+        // Gray encode
+        for (int i = 1; i < dim; i++) X[i] ^= X[i - 1];
+        t = 0;
+        for (Q = M; Q > 1; Q >>= 1)
+            if (X[dim - 1] & Q) t ^= Q - 1;
+        for (int i = 0; i < dim; i++) X[i] ^= t;
+    }
 
     Decoder::Decoder(QString filePath)
     {
@@ -55,17 +94,7 @@ namespace DepthEncoder
                 int g = std::round(m_Data[x*3 + y * m_Width*3 + 1]);
                 int b = std::round(m_Data[x*3 + y * m_Width*3 + 2]);
 
-                int codex = 0, codey = 0, codez = 0;
-
-                const int nbits2 = 2 * nbits;
-
-                for (int i = 0, andbit = 1; i < nbits2; i += 2, andbit <<= 1) {
-                    codex |= (int)(r & andbit) << i;
-                    codey |= (int)(g & andbit) << i;
-                    codez |= (int)(b & andbit) << i;
-                }
-
-                float d = ((codez << 2) | (codey << 1) | codex) / 255.0f;
+                float d = GetMortonCode(r, g, b, nbits) / 255.f;
                 outImage.setPixel(x, y, qRgb(d,d,d));
             }
         }
@@ -75,7 +104,26 @@ namespace DepthEncoder
 
     QImage Decoder::DecodeHilbert()
     {
-        return QImage();
+        QImage outImage(m_Width, m_Height, QImage::Format_RGB888);
+
+        const int nbits = CurveOrder<uint16_t>();
+
+        for(uint32_t y = 0; y < m_Height; y++) {
+            for(uint32_t x = 0; x < m_Width; x++) {
+                int r = std::round(m_Data[x*3 + y * m_Width*3]);
+                int g = std::round(m_Data[x*3 + y * m_Width*3 + 1]);
+                int b = std::round(m_Data[x*3 + y * m_Width*3 + 2]);
+
+                int col[3] = {r,g,b};
+                TransposeToHilbertCoords(col, nbits, 3);
+
+                std::swap(col[0], col[2]);
+                float d = GetMortonCode(col[0], col[1], col[2], nbits) / 255.0f;
+                outImage.setPixel(x, y, qRgb(d,d,d));
+            }
+        }
+
+        return outImage;
     }
 
     QImage Decoder::DecodeTriangle()
