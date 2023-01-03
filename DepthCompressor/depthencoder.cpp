@@ -10,31 +10,6 @@
 #include <iostream>
 #include <sstream>
 
-// Credits: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
-static void TransposeFromHilbertCoords(uint8_t* X, int nbits, int dim)
-{
-    uint32_t N = 2 << (nbits - 1), P, Q, t;
-
-    // Gray decode by H ^ (H/2)
-    t = X[dim - 1] >> 1;
-    // Corrected error in Skilling's paper on the following line. The appendix had i >= 0 leading to negative array index.
-    for (int i = dim - 1; i > 0; i--) X[i] ^= X[i - 1];
-    X[0] ^= t;
-
-    // Undo excess work
-    for (Q = 2; Q != N; Q <<= 1) {
-        P = Q - 1;
-        for (int i = dim - 1; i >= 0; i--)
-            if (X[i] & Q) // Invert
-                X[0] ^= P;
-            else { // Exchange
-                t = (X[0] ^ X[i]) & P;
-                X[0] ^= t;
-                X[i] ^= t;
-            }
-    }
-}
-
 static QString EncodingModeToStr(DepthEncoder::EncodingMode mode)
 {
     if (mode == DepthEncoder::EncodingMode::HILBERT) return "Hilbert";
@@ -88,6 +63,25 @@ namespace DepthEncoder
         }
     }
 
+    Encoder::Encoder(const uint8_t* data, uint32_t width, uint32_t height)
+    {
+        uint32_t size = width * height * 3;
+        m_Width = width;
+        m_Height = height;
+        m_Min = 1e20;
+        m_Max = -1e20;
+        m_Data.resize(size);
+
+        for (uint32_t i=0; i<size; i++)
+        {
+            m_Data[i] = data[i];
+            m_Min = std::min(m_Min, m_Data[i]);
+            m_Max = std::max(m_Max, m_Data[i]);
+        }
+
+        std::cout << "inited";
+    }
+
     void Encoder::Encode(const QString& outPath, const EncodingProperties& props)
     {
         std::vector<QImage> toSave;
@@ -121,7 +115,10 @@ namespace DepthEncoder
         {
             std::stringstream ss;
             ss << outPath.toStdString() << labels[i] << extension;
-            SaveJPEG(QString(ss.str().c_str()), toSave[i], props.Quality);
+            if (extension == ".jpg")
+                SaveJPEG(QString(ss.str().c_str()), toSave[i], props.Quality);
+            else
+                toSave[i].save(QString(ss.str().c_str()));
         }
 
         // Save json data
@@ -268,7 +265,7 @@ namespace DepthEncoder
                 d = ((d-m_Min)/(m_Max - m_Min)) * w;
 
                 // Convert to Morton coordinates
-                std::vector<uint8_t> col = MortonToVec((uint16_t)std::round(d));
+                std::vector<uint8_t> col = DepthEncoder::MortonToVec((uint16_t)std::round(d));
 
                 img.setPixel(x, y, qRgb(col[0], col[1], col[2]));
 
@@ -302,6 +299,14 @@ namespace DepthEncoder
 
         const int w = 65535;
 
+        /*
+        for (int i=0; i<w; i++)
+        {
+            auto col = DepthEncoder::HilbertToVec(i);
+            if (DepthEncoder::GetHilbertCode(col[0], col[1], col[2], 6) != i)
+                std::cout << "Err" << std::endl;
+        }*/
+
         // Encode depth, save into QImage img
         for(uint32_t y = 0; y < m_Height; y++) {
             for(uint32_t x = 0; x < m_Width; x++) {
@@ -310,15 +315,14 @@ namespace DepthEncoder
                 d = ((d-m_Min)/(m_Max - m_Min)) * w;
 
                 // Convert to Morton coordinates
-                std::vector<uint8_t> col = HilbertToVec((uint16_t)std::round(d));
-
-                img.setPixel(x, y, qRgb(col[0], col[1], col[2]));
+                std::vector<uint8_t> col = DepthEncoder::HilbertToVec((uint16_t)std::round(d));
+                img.setPixel(x, y, qRgb(col[0] * 4, col[1]* 4, col[2]* 4));
 
                 if (splitChannels)
                 {
-                    red.setPixel(x, y, qRgb(col[0], col[0], col[0]));
-                    green.setPixel(x, y, qRgb(col[1], col[1], col[1]));
-                    blue.setPixel(x, y, qRgb(col[2], col[2], col[2]));
+                    red.setPixel(x, y, qRgb(col[0] * 4, col[0] * 4, col[0] * 4));
+                    green.setPixel(x, y, qRgb(col[1] * 4, col[1] * 4, col[1] * 4));
+                    blue.setPixel(x, y, qRgb(col[2] * 4, col[2] * 4, col[2] * 4));
                 }
             }
         }
@@ -332,36 +336,6 @@ namespace DepthEncoder
         }
 
         return ret;
-    }
-
-    // Credits: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
-    std::vector<uint8_t> Encoder::MortonToVec(uint16_t p)
-    {
-        const unsigned int nbits = CurveOrder<uint16_t>();
-        std::vector<uint8_t> ret(3);
-        ret[0] = 0; ret[1] = 0; ret[2] = 0;
-
-        for (unsigned int i = 0; i <= nbits; ++i) {
-            uint8_t selector = 1;
-            unsigned int shift_selector = 3 * i;
-            unsigned int shiftback = 2 * i;
-            ret[0] |= (p & (selector << shift_selector)) >> (shiftback);
-            ret[1] |= (p & (selector << (shift_selector + 1))) >> (shiftback + 1);
-            ret[2] |= (p & (selector << (shift_selector + 2))) >> (shiftback + 2);
-        }
-        return ret;
-    }
-
-    // Credits: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
-    std::vector<uint8_t> Encoder::HilbertToVec(uint16_t p)
-    {
-        const int nbits = CurveOrder<uint16_t>();
-
-        std::vector<uint8_t> v = MortonToVec(p);
-        std::swap(v[0], v[2]);
-        TransposeFromHilbertCoords(v.data(), nbits, 3);
-
-        return v;
     }
 
     void Encoder::SaveJPEG(const QString& path, const QImage& sourceImage, uint32_t quality)

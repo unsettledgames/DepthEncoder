@@ -26,6 +26,7 @@ namespace DepthEncoder
     {
     public:
         Encoder(const QString& path);
+        Encoder(const uint8_t* data, uint32_t width, uint32_t height);
         void Encode(const QString& outPath, const EncodingProperties& props);
 
     private:
