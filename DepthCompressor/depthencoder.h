@@ -4,12 +4,12 @@
 #include <QString>
 #include <vector>
 
+#include <Defs.h>
 
 class QImage;
 
 namespace DepthEncoder
 {
-    enum EncodingMode {NONE = 0, TRIANGLE = 1, MORTON = 2, HILBERT = 3};
     struct EncodingProperties
     {
         EncodingMode Mode = TRIANGLE;

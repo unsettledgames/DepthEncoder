@@ -10,12 +10,15 @@ LIBS += ../Deps/libjpeg-turbo-2.0.6/bin/jpeg62.dll
 #mac:LIBS += -L/usr/local/Cellar/jpeg-turbo/2.0.6/lib/ -ljpeg
 
 SOURCES += \
+        depthdecoder.cpp \
         depthencoder.cpp \
         main.cpp \
         jpeg_decoder.cpp \
         jpeg_encoder.cpp
 
 HEADERS += \
+        Defs.h \
+        depthdecoder.h \
         depthencoder.h \
         jpeg_decoder.h \
         jpeg_encoder.h
