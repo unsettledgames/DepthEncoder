@@ -36,11 +36,11 @@ using namespace std;
 int main(int argc, char *argv[])
 {
     DepthEncoder::Encoder encoder(argv[1]);
-    DepthEncoder::Decoder decoder("elevation3.png");
+    DepthEncoder::Decoder decoder("elevation3Morton.jpg.jpg");
     DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::MORTON, 100, false);
 
-    encoder.Encode("elevation3Hilbert.jpg", props);
-    decoder.Decode("decoded.png", DepthEncoder::EncodingMode::TRIANGLE);
+    encoder.Encode("elevation3Morton.jpg", props);
+    decoder.Decode("decoded.png", DepthEncoder::EncodingMode::MORTON);
 
     // Save output images
     //dumpImage("slope.png", slopes, ncols-2, nrows-2);

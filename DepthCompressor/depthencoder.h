@@ -29,7 +29,6 @@ namespace DepthEncoder
         void Encode(const QString& outPath, const EncodingProperties& props);
 
     private:
-        template <typename intcode_t> constexpr int CurveOrder() { return (sizeof(intcode_t) * 8) / 3; }
         void SaveJPEG(const QString& path, const QImage& img, uint32_t quality);
 
         std::vector<QImage> EncodeNone(bool splitChannels);

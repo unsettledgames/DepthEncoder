@@ -337,7 +337,7 @@ namespace DepthEncoder
     // Credits: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
     std::vector<uint8_t> Encoder::MortonToVec(uint16_t p)
     {
-        const unsigned int nbits = std::ceil(CurveOrder<uint16_t>());
+        const unsigned int nbits = CurveOrder<uint16_t>();
         std::vector<uint8_t> ret(3);
         ret[0] = 0; ret[1] = 0; ret[2] = 0;
 

@@ -42,8 +42,41 @@ namespace DepthEncoder
     }
 
     QImage Decoder::DecodeNone() { return QImage();}
-    QImage Decoder::DecodeMorton() { return QImage();}
-    QImage Decoder::DecodeHilbert() { return QImage();}
+
+    QImage Decoder::DecodeMorton()
+    {
+        QImage outImage(m_Width, m_Height, QImage::Format_RGB888);
+
+        const int nbits = CurveOrder<uint16_t>();
+
+        for(uint32_t y = 0; y < m_Height; y++) {
+            for(uint32_t x = 0; x < m_Width; x++) {
+                int r = std::round(m_Data[x*3 + y * m_Width*3]);
+                int g = std::round(m_Data[x*3 + y * m_Width*3 + 1]);
+                int b = std::round(m_Data[x*3 + y * m_Width*3 + 2]);
+
+                int codex = 0, codey = 0, codez = 0;
+
+                const int nbits2 = 2 * nbits;
+
+                for (int i = 0, andbit = 1; i < nbits2; i += 2, andbit <<= 1) {
+                    codex |= (int)(r & andbit) << i;
+                    codey |= (int)(g & andbit) << i;
+                    codez |= (int)(b & andbit) << i;
+                }
+
+                float d = ((codez << 2) | (codey << 1) | codex) / 255.0f;
+                outImage.setPixel(x, y, qRgb(d,d,d));
+            }
+        }
+
+        return outImage;
+    }
+
+    QImage Decoder::DecodeHilbert()
+    {
+        return QImage();
+    }
 
     QImage Decoder::DecodeTriangle()
     {
