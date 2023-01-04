@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <vector>
+#include <iostream>
 
 
 // Credits for Morton and Hilbert convertions: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
@@ -145,6 +146,10 @@ namespace DepthEncoder
         float gamma, phi, PHI, K, Z;
         float i1 = r / 255.0f, i2 = g / 255.0f;
 
+        if (2.0f * i1 - 1.0f <-1)
+        {
+            std::cout << "err" << std::endl;
+        }
         phi = std::fabs(std::acos(2.0f * i1 - 1.0f));
         gamma = std::floor((i2 * w) / beta);
 

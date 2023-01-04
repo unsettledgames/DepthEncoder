@@ -13,6 +13,7 @@
 #include <cmath>
 #include <math.h>
 
+#include <conversions.h>
 #include <depthencoder.h>
 #include <depthdecoder.h>
 
@@ -40,6 +41,26 @@ void GeneratePics()
     std::ofstream out;
     out.open("output.txt");
 
+    float maxErr = -1e20;
+    float minErr = 1e20;
+    float avgErr = 0;
+
+    for (int i=0; i<65535; i++)
+    {
+        auto col = DepthEncoder::PhaseToVec(i);
+        int code = DepthEncoder::GetPhaseCode(col[0], col[1], col[2]);
+        float err = std::fabs(code - i);
+        maxErr = std::max(err, maxErr);
+        minErr = std::min(err, minErr);
+        avgErr += err;
+
+        if (maxErr > 65535)
+            std::cout << "err";
+    }
+
+    std::cout << "Min: " << minErr << ", max: " << maxErr << ", avg: " << avgErr / 65535.0f << std::endl;
+
+
     for (uint32_t m=0; m<4; m++)
     {
         int size = 1000 * 1000;
@@ -50,25 +71,26 @@ void GeneratePics()
         {
             for (uint32_t j=0; j<1000; j++)
             {
-                data1[j + i*1000] = 65535 * (j / 1000.0f);
-                data2[j + i*1000] = 65535 * (i / 1000.0f + j/1000.0f) / 2.0f;
+                data1[j + i*1000] = std::floor((65535 * j) / 1000.0f);
+                data2[j + i*1000] = std::floor((65535 * (i + j)) / 2000.0f);
             }
         }
 
         DepthEncoder::Encoder encoder1(data1.data(), 1000, 1000);
         DepthEncoder::Encoder encoder2(data2.data(), 1000, 1000);
 
-        DepthEncoder::EncodingProperties props(modes[m], 50, false);
+        DepthEncoder::EncodingProperties props(modes[m], 100, false);
 
-        encoder1.Encode("artencoded1.jpg", props);
-        encoder2.Encode("artencoded2.jpg", props);
+        encoder1.Encode("artencoded1.png", props);
+        encoder2.Encode("artencoded2.png", props);
 
-        DepthEncoder::Decoder artDecoder1("artencoded1.jpg");
-        DepthEncoder::Decoder artDecoder2("artencoded2.jpg");
+        DepthEncoder::Decoder artDecoder1("artencoded1.png");
+        DepthEncoder::Decoder artDecoder2("artencoded2.png");
 
         artDecoder1.Decode(decoded1, modes[m]);
         artDecoder2.Decode(decoded2, modes[m]);
 
+        /*
         QImage out1(1000, 1000, QImage::Format_RGB888);
         QImage out2(1000, 1000, QImage::Format_RGB888);
         for (uint32_t i=0; i<1000; i++)
@@ -82,6 +104,7 @@ void GeneratePics()
         }
         out1.save("artdecoded1" + labels[m] + ".png");
         out2.save("artdecoded2" + labels[m] + ".png");
+        */
 
         out << "MODE: " << labels[m].toStdString() << "\n";
 

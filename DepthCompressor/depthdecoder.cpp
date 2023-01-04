@@ -52,9 +52,9 @@ namespace DepthEncoder
         {
             for(uint32_t x = 0; x < m_Width; x++)
             {
-                int r = std::round(m_Data[x*3 + y * m_Width*3]);
-                int g = std::round(m_Data[x*3 + y * m_Width*3 + 1]);
-                int b = std::round(m_Data[x*3 + y * m_Width*3 + 2]);
+                int r = m_Data[x*3 + y * m_Width*3];
+                int g = m_Data[x*3 + y * m_Width*3 + 1];
+                int b = m_Data[x*3 + y * m_Width*3 + 2];
 
                 switch (mode)
                 {
