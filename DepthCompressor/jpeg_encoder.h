@@ -29,7 +29,7 @@ public:
 	bool encode(uint8_t *img, int width, int height, const char* path);
 	bool encode(uint8_t *img, int width, int height, uint8_t *&buffer, int &length);
 
-    bool init(const char* path, int width, int height, uint8_t** buffer, unsigned long* size);
+    bool init(int width, int height, uint8_t** buffer, unsigned long* size);
 	bool writeRows(uint8_t *rows, int n);
 	size_t finish(); //return size
 

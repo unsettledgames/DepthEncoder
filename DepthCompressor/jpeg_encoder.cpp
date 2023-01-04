@@ -106,7 +106,7 @@ bool JpegEncoder::encode(uint8_t* img, int width, int height) {
 }
 
 
-bool JpegEncoder::init(const char* path, int width, int height, uint8_t** buffer, unsigned long* size) {
+bool JpegEncoder::init(int width, int height, uint8_t** buffer, unsigned long* size) {
     /*
     file = fopen(path, "wb");
 	if(!file)

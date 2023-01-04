@@ -80,8 +80,6 @@ namespace DepthEncoder
             m_Min = std::min(m_Min, m_Data[i]);
             m_Max = std::max(m_Max, m_Data[i]);
         }
-
-        std::cout << "inited";
     }
 
     void Encoder::Encode(const QString& outPath, const EncodingProperties& props)
@@ -92,6 +90,7 @@ namespace DepthEncoder
         for (uint32_t i=0; i<3; i++)
             splitChannels[i] = QImage(m_Width, m_Height, QImage::Format_RGB32);
 
+        // Encode data
         Encode(data, props);
 
         for (uint32_t y=0; y<m_Height; y++)
@@ -215,7 +214,7 @@ namespace DepthEncoder
         encoder.setJpegColorSpace(J_COLOR_SPACE::JCS_RGB);
         encoder.setQuality(quality);
 
-        encoder.init(path.toStdString().c_str(), src.width(), src.height(), &retBuffer, &retSize);
+        encoder.init(src.width(), src.height(), &retBuffer, &retSize);
         encoder.writeRows(src.bits(), src.height());
         encoder.finish();
 

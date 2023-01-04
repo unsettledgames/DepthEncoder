@@ -173,13 +173,14 @@ namespace DepthEncoder
 
     static int GetTriangleCode(int r, int g, int b)
     {
-
+        return 0;
     }
 
     static std::vector<uint8_t> TriangleToVec(uint16_t d)
     {
         const float w = 65535.0f;
         const float p = 512.0f / w;
+        std::vector<uint8_t> ret(3);
 
         float Ld, Ha, Hb;
         Ld = (d + 0.5) / w;
@@ -197,6 +198,9 @@ namespace DepthEncoder
             Hb = 2 - mod2;
 
         Ld *= 255; Ha *= 255; Hb *= 255;
+        ret[0] = Ld; ret[1] = Ha; ret[2] = Hb;
+
+        return ret;
     }
 }
 

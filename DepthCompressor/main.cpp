@@ -34,58 +34,98 @@ using namespace std;
 
 void GeneratePics()
 {
-    int size = 1000 * 1000;
-    std::vector<float> data1(size), data2(size);
-    std::vector<uint16_t> encoded1(size), encoded2(size), decoded1(size), decoded2(size);
+    DepthEncoder::EncodingMode modes[4] = {DepthEncoder::EncodingMode::HILBERT,DepthEncoder::EncodingMode::MORTON,
+                                          DepthEncoder::EncodingMode::PHASE, DepthEncoder::EncodingMode::TRIANGLE};
+    QString labels[4] = {"Hilbert", "Morton", "Phase", "Triangle"};
+    std::ofstream out;
+    out.open("output.txt");
 
-    QImage img1(1000, 1000, QImage::Format_ARGB32);
-    QImage img2(1000, 1000, QImage::Format_ARGB32);
-
-    for (int i=0; i<1000; i++)
+    for (uint32_t m=0; m<4; m++)
     {
-        for (int j=0; j<1000; j++)
-        {
-            float val = 255 * (i / 1000.0f);
-            float val2 = 255 * ((i + j) / 2000.0f);
+        int size = 1000 * 1000;
+        std::vector<float> data1(size), data2(size);
+        std::vector<uint16_t> decoded1(size), decoded2(size);
 
-            img1.setPixel(i, j, qRgb(val, val, val));
-            img2.setPixel(i, j, qRgb(val2, val2, val2));
+        for (uint32_t i=0; i<1000; i++)
+        {
+            for (uint32_t j=0; j<1000; j++)
+            {
+                data1[j + i*1000] = 65535 * (j / 1000.0f);
+                data2[j + i*1000] = 65535 * (i / 1000.0f + j/1000.0f) / 2.0f;
+            }
         }
+
+        DepthEncoder::Encoder encoder1(data1.data(), 1000, 1000);
+        DepthEncoder::Encoder encoder2(data2.data(), 1000, 1000);
+
+        DepthEncoder::EncodingProperties props(modes[m], 50, false);
+
+        encoder1.Encode("artencoded1.jpg", props);
+        encoder2.Encode("artencoded2.jpg", props);
+
+        DepthEncoder::Decoder artDecoder1("artencoded1.jpg");
+        DepthEncoder::Decoder artDecoder2("artencoded2.jpg");
+
+        artDecoder1.Decode(decoded1, modes[m]);
+        artDecoder2.Decode(decoded2, modes[m]);
+
+        QImage out1(1000, 1000, QImage::Format_RGB888);
+        QImage out2(1000, 1000, QImage::Format_RGB888);
+        for (uint32_t i=0; i<1000; i++)
+        {
+            for (uint32_t j=0; j<1000; j++)
+            {
+                uint32_t idx = j + i * 1000;
+                out1.setPixel(j, i, qRgb(decoded1[idx]/255.0f,decoded1[idx+1]/255.0f,decoded1[idx+2]/255.0f));
+                out2.setPixel(j, i, qRgb(decoded2[idx]/255.0f,decoded2[idx+1]/255.0f,decoded2[idx+2]/255.0f));
+            }
+        }
+        out1.save("artdecoded1" + labels[m] + ".png");
+        out2.save("artdecoded2" + labels[m] + ".png");
+
+        out << "MODE: " << labels[m].toStdString() << "\n";
+
+        float maxErr = -1e20;
+        float minErr = 1e20;
+        float avgErr = 0;
+
+        for (uint32_t i=0; i<decoded1.size(); i++)
+        {
+            float err = std::fabs(decoded1[i] - data1[i]);
+            maxErr = std::max(err, maxErr);
+            minErr = std::min(err, minErr);
+            avgErr += err;
+        }
+        avgErr /= (1000 * 1000);
+
+        out << "LEFT TO RIGHT" << std::endl;
+        out << "Min: " << minErr << "\nMax: " << maxErr << "\nAvg: " << avgErr << std::endl << std::endl;
+
+        maxErr = 1e-20;
+        minErr = 1e20;
+        avgErr = 0;
+
+
+        for (uint32_t i=0; i<decoded2.size(); i++)
+        {
+            float err = std::fabs(decoded2[i] - data2[i]);
+            maxErr = std::max(err, maxErr);
+            minErr = std::min(err, minErr);
+            avgErr += err;
+        }
+        avgErr /= (1000 * 1000);
+        out << "DIAGONAL" << std::endl;
+        out << "Min: " << minErr << "\nMax: " << maxErr << "\nAvg: " << avgErr << std::endl;
+        out << std::endl << "---------------------------" << std::endl << std::endl;
     }
 
-    img1 = img1.convertToFormat(QImage::Format_RGB888);
-    img2 = img2.convertToFormat(QImage::Format_RGB888);
-
-    for (uint32_t i=0; i<1000; i++)
-    {
-        for (uint32_t j=0; j<1000; j++)
-        {
-            data1[j + i*1000] = 65535 * (j / 1000.0f);
-            data2[j + i*1000] = 65535 * (i / 1000.0f + j/1000.0f) / 2.0f;
-        }
-    }
-
-    DepthEncoder::Encoder encoder1(data1.data(), 1000, 1000);
-    DepthEncoder::Encoder encoder2(data2.data(), 1000, 1000);
-
-    DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::HILBERT, 100, false);
-
-    //encoder1.Encode(encoded1, props);
-   // encoder2.Encode(encoded2, props);
-
-    DepthEncoder::Decoder artDecoder1("artEncoded1.png.png");
-    DepthEncoder::Decoder artDecoder2("artEncoded2.png.png");
-
-    artDecoder1.Decode(decoded1, DepthEncoder::EncodingMode::HILBERT);
-    artDecoder2.Decode(decoded2, DepthEncoder::EncodingMode::HILBERT);
-
-    img1.save("artificial1.jpg");
-    img2.save("artificial2.jpg");
+    out.flush();
+    out.close();
 }
 
 int main(int argc, char *argv[])
 {
-    //GeneratePics();
+    GeneratePics();
 
     DepthEncoder::Encoder encoder(argv[1]);
     DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::PHASE, 100, true);
