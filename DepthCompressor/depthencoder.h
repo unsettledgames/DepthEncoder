@@ -27,19 +27,12 @@ namespace DepthEncoder
     public:
         Encoder(const QString& path);
         Encoder(const float* data, uint32_t width, uint32_t height);
+
         void Encode(const QString& outPath, const EncodingProperties& props);
+        void Encode(std::vector<uint8_t>& vec, const EncodingProperties& props);
 
     private:
         void SaveJPEG(const QString& path, const QImage& img, uint32_t quality);
-
-        std::vector<QImage> EncodeNone(bool splitChannels);
-        std::vector<QImage> EncodeTriangle(bool splitChannels);
-        std::vector<QImage> EncodeMorton(bool splitChannels);
-        std::vector<QImage> EncodeHilbert(bool splitChannels);
-        std::vector<QImage> EncodePhase(bool splitChannels);
-
-        std::vector<uint8_t> MortonToVec(uint16_t point);
-        std::vector<uint8_t> HilbertToVec(uint16_t point);
 
     private:
         QString m_Path;

@@ -18,6 +18,7 @@ SOURCES += \
 
 HEADERS += \
         conversions.h \
+        defs.h \
         depthdecoder.h \
         depthencoder.h \
         jpeg_decoder.h \

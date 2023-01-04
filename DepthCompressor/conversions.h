@@ -28,6 +28,9 @@ namespace DepthEncoder
     static int GetPhaseCode(int r, int g, int b);
     static std::vector<uint8_t> PhaseToVec(uint16_t p);
 
+    static int GetTriangleCode(int r, int g, int b);
+    static std::vector<uint8_t> TriangleToVec(uint16_t p);
+
     // Hilbert transpose
     static void TransposeFromHilbertCoords(uint8_t* X, int nbits, int dim)
     {
@@ -166,6 +169,34 @@ namespace DepthEncoder
         ret[2] = 0;
 
         return ret;
+    }
+
+    static int GetTriangleCode(int r, int g, int b)
+    {
+
+    }
+
+    static std::vector<uint8_t> TriangleToVec(uint16_t d)
+    {
+        const float w = 65535.0f;
+        const float p = 512.0f / w;
+
+        float Ld, Ha, Hb;
+        Ld = (d + 0.5) / w;
+
+        float mod = fmod(Ld / (p/2.0f), 2.0f);
+        if (mod <= 1)
+            Ha = mod;
+        else
+            Ha = 2 - mod;
+
+        float mod2 = fmod((Ld - p/4.0f) / (p/2.0f), 2.0f);
+        if (mod2 <= 1)
+            Hb = mod2;
+        else
+            Hb = 2 - mod2;
+
+        Ld *= 255; Ha *= 255; Hb *= 255;
     }
 }
 

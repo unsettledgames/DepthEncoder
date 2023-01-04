@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <defs.h>
 #include <conversions.h>
 #include <jpeg_encoder.h>
 
@@ -85,28 +86,27 @@ namespace DepthEncoder
 
     void Encoder::Encode(const QString& outPath, const EncodingProperties& props)
     {
-        std::vector<QImage> toSave;
+        std::vector<uint8_t> data(m_Width * m_Height * 3);
+        QImage img(m_Width, m_Height, QImage::Format_RGB32);
+        QImage splitChannels[3] = {QImage(), QImage(), QImage()};
+        for (uint32_t i=0; i<3; i++)
+            splitChannels[i] = QImage(m_Width, m_Height, QImage::Format_RGB32);
 
-        // Encode depending on selected mode
-        switch (props.Mode)
+        Encode(data, props);
+
+        for (uint32_t y=0; y<m_Height; y++)
         {
-            case EncodingMode::NONE:
-                toSave = EncodeNone(props.SplitChannels);
-                break;
-            case EncodingMode::TRIANGLE:
-                toSave = EncodeTriangle(props.SplitChannels);
-                break;
-            case EncodingMode::MORTON:
-                toSave = EncodeMorton(props.SplitChannels);
-                break;
-            case EncodingMode::HILBERT:
-                toSave = EncodeHilbert(props.SplitChannels);
-                break;
-            case EncodingMode::PHASE:
-                toSave = EncodePhase(props.SplitChannels);
-                break;
-            default:
-                break;
+            for (uint32_t x=0; x<m_Width; x++)
+            {
+                uint32_t idx = x*3 + y*m_Width*3;
+                QRgb col = qRgb(data[idx], data[idx+1], data[idx+2]);
+
+                // TODO: split channels
+                img.setPixel(x, y, col);
+                if (props.SplitChannels)
+                    for (uint32_t i=0; i<3; i++)
+                        splitChannels[i].setPixel(x, y, col);
+            }
         }
 
         // Save results
@@ -117,14 +117,22 @@ namespace DepthEncoder
         else
             extension = ".png";
 
-        for (uint32_t i=0; i<std::min<uint32_t>(toSave.size(), 4); i++)
+        if (extension == ".jpg")
+            SaveJPEG(outPath, img, props.Quality);
+        else
+            img.save(outPath);
+
+        if (props.SplitChannels)
         {
-            std::stringstream ss;
-            ss << outPath.toStdString() << labels[i] << extension;
-            if (extension == ".jpg")
-                SaveJPEG(QString(ss.str().c_str()), toSave[i], props.Quality);
-            else
-                toSave[i].save(QString(ss.str().c_str()));
+            for (uint32_t i=0; i<3; i++)
+            {
+                std::stringstream ss;
+                ss << outPath.toStdString() << labels[i] << extension;
+                if (extension == ".jpg")
+                    SaveJPEG(QString(ss.str().c_str()), splitChannels[i], props.Quality);
+                else
+                    splitChannels[i].save(QString(ss.str().c_str()));
+            }
         }
 
         // Save json data
@@ -151,239 +159,50 @@ namespace DepthEncoder
         stream << doc.toJson();
     }
 
-    std::vector<QImage> Encoder::EncodeNone(bool splitChannels)
+    void Encoder::Encode(std::vector<uint8_t>& vec, const EncodingProperties &props)
     {
-        std::vector<QImage> ret;
-        QImage img(m_Width, m_Height, QImage::Format_RGB32);
-        QImage red(m_Width, m_Height, QImage::Format_RGB32);
-        QImage green(m_Width, m_Height, QImage::Format_RGB32);
-        QImage blue(m_Width, m_Height, QImage::Format_RGB32);
+        std::vector<uint8_t> col;
+        float d;
 
         for(uint32_t y = 0; y < m_Height; y++)
         {
             for(uint32_t x = 0; x < m_Width; x++)
             {
-                float h = m_Data[x + y*m_Width];
-                h = (h-m_Min)/(m_Max - m_Min);
-                //quantize to 65k
-                int height = floor(h*65535);
-                int r = height/256;
-                int g = height/256;
-                int b = height/256;
+                d = m_Data[x + y*m_Width];
+                d = DC_W * ((d-m_Min)/(m_Max - m_Min));
 
-                img.setPixel(x, y, qRgb(r, g, b));
-                if (splitChannels)
+                switch (props.Mode)
                 {
-                    red.setPixel(x, y, r);
-                    green.setPixel(x, y, g);
-                    blue.setPixel(x, y, b);
+                    case EncodingMode::NONE:
+                    {
+                        uint8_t r = d/255;
+                        uint8_t g = d/255;
+                        uint8_t b = d/255;
+
+                        col = {r,g,b};
+                        break;
+                    }
+                    case EncodingMode::TRIANGLE:
+                        col = TriangleToVec(d);
+                        break;
+                    case EncodingMode::MORTON:
+                        col = MortonToVec(d);
+                        break;
+                    case EncodingMode::HILBERT:
+                        col = HilbertToVec(d);
+                        break;
+                    case EncodingMode::PHASE:
+                        col = PhaseToVec(d);
+                        break;
+                    default:
+                        break;
                 }
+
+                vec[x*3 + y*m_Height*3 + 0] = col[0];
+                vec[x*3 + y*m_Height*3 + 1] = col[1];
+                vec[x*3 + y*m_Height*3 + 2] = col[2];
             }
         }
-
-        ret.push_back(img);
-        if (splitChannels)
-        {
-            ret.push_back(red);
-            ret.push_back(green);
-            ret.push_back(blue);
-        }
-
-        return ret;
-    }
-
-    std::vector<QImage> Encoder::EncodeTriangle(bool splitChannels)
-    {
-        std::vector<QImage> ret;
-        QImage img(m_Width, m_Height, QImage::Format_RGB32);
-        QImage red(m_Width, m_Height, QImage::Format_RGB32);
-        QImage green(m_Width, m_Height, QImage::Format_RGB32);
-        QImage blue(m_Width, m_Height, QImage::Format_RGB32);
-
-        const int w = 65536;
-
-        // Function data
-        int np = 512;
-        float p = (float)np / w;
-
-        // Encode depth, save into QImage img
-        for(uint32_t y = 0; y < m_Height; y++) {
-            for(uint32_t x = 0; x < m_Width; x++) {
-                float Ld, Ha, Hb;
-
-                // Quantize depth
-                float d = m_Data[x + y*m_Width];
-                d = ((d-m_Min)/(m_Max - m_Min)) * w;
-
-                Ld = (d + 0.5) / w;
-
-                float mod = fmod(Ld / (p/2.0f), 2.0f);
-                if (mod <= 1)
-                    Ha = mod;
-                else
-                    Ha = 2 - mod;
-
-                float mod2 = fmod((Ld - p/4.0f) / (p/2.0f), 2.0f);
-                if (mod2 <= 1)
-                    Hb = mod2;
-                else
-                    Hb = 2 - mod2;
-
-                Ld *= 255; Ha *= 255; Hb *= 255;
-                img.setPixel(x, y, qRgb(Ld, Ha, Hb));
-
-                if (splitChannels)
-                {
-                    red.setPixel(x, y, qRgb(Ld, Ld, Ld));
-                    green.setPixel(x, y, qRgb(Ha, Ha, Ha));
-                    blue.setPixel(x, y, qRgb(Hb, Hb, Hb));
-                }
-            }
-        }
-
-        ret.push_back(img);
-        if (splitChannels)
-        {
-            ret.push_back(red);
-            ret.push_back(green);
-            ret.push_back(blue);
-        }
-
-        return ret;
-    }
-
-    std::vector<QImage> Encoder::EncodePhase(bool splitChannels)
-    {
-        std::vector<QImage> ret;
-        QImage img(m_Width, m_Height, QImage::Format_RGB32);
-        QImage red(m_Width, m_Height, QImage::Format_RGB32);
-        QImage green(m_Width, m_Height, QImage::Format_RGB32);
-        QImage blue(m_Width, m_Height, QImage::Format_RGB32);
-
-        const int w = 65535;
-
-        // Encode depth, save into QImage img
-        for(uint32_t y = 0; y < m_Height; y++) {
-            for(uint32_t x = 0; x < m_Width; x++) {
-                // Quantize depth
-                float d = m_Data[x + y*m_Width];
-                d = ((d-m_Min)/(m_Max - m_Min)) * w;
-
-                // Convert to Morton coordinates
-                std::vector<uint8_t> col = DepthEncoder::PhaseToVec((uint16_t)std::round(d));
-
-                img.setPixel(x, y, qRgb(col[0], col[1], col[2]));
-
-                if (splitChannels)
-                {
-                    red.setPixel(x, y, qRgb(col[0], col[0], col[0]));
-                    green.setPixel(x, y, qRgb(col[1], col[1], col[1]));
-                    blue.setPixel(x, y, qRgb(col[2], col[2], col[2]));
-                }
-            }
-        }
-
-        ret.push_back(img);
-        if (splitChannels)
-        {
-            ret.push_back(red);
-            ret.push_back(green);
-            ret.push_back(blue);
-        }
-
-        return ret;
-    }
-
-    // Encode high part in R channel, use morton to encode high precision values?
-    std::vector<QImage> Encoder::EncodeMorton(bool splitChannels)
-    {
-        std::vector<QImage> ret;
-        QImage img(m_Width, m_Height, QImage::Format_RGB32);
-        QImage red(m_Width, m_Height, QImage::Format_RGB32);
-        QImage green(m_Width, m_Height, QImage::Format_RGB32);
-        QImage blue(m_Width, m_Height, QImage::Format_RGB32);
-
-        const int w = 65535;
-
-        // Encode depth, save into QImage img
-        for(uint32_t y = 0; y < m_Height; y++) {
-            for(uint32_t x = 0; x < m_Width; x++) {
-                // Quantize depth
-                float d = m_Data[x + y*m_Width];
-                d = ((d-m_Min)/(m_Max - m_Min)) * w;
-
-                // Convert to Morton coordinates
-                std::vector<uint8_t> col = DepthEncoder::MortonToVec((uint16_t)std::round(d));
-
-                img.setPixel(x, y, qRgb(col[0], col[1], col[2]));
-
-                if (splitChannels)
-                {
-                    red.setPixel(x, y, qRgb(col[0], col[0], col[0]));
-                    green.setPixel(x, y, qRgb(col[1], col[1], col[1]));
-                    blue.setPixel(x, y, qRgb(col[2], col[2], col[2]));
-                }
-            }
-        }
-
-        ret.push_back(img);
-        if (splitChannels)
-        {
-            ret.push_back(red);
-            ret.push_back(green);
-            ret.push_back(blue);
-        }
-
-        return ret;
-    }
-
-    std::vector<QImage> Encoder::EncodeHilbert(bool splitChannels)
-    {
-        std::vector<QImage> ret;
-        QImage img(m_Width, m_Height, QImage::Format_RGB32);
-        QImage red(m_Width, m_Height, QImage::Format_RGB32);
-        QImage green(m_Width, m_Height, QImage::Format_RGB32);
-        QImage blue(m_Width, m_Height, QImage::Format_RGB32);
-
-        const int w = 65535;
-
-        /*
-        for (int i=0; i<w; i++)
-        {
-            auto col = DepthEncoder::HilbertToVec(i);
-            if (DepthEncoder::GetHilbertCode(col[0], col[1], col[2], 6) != i)
-                std::cout << "Err" << std::endl;
-        }*/
-
-        // Encode depth, save into QImage img
-        for(uint32_t y = 0; y < m_Height; y++) {
-            for(uint32_t x = 0; x < m_Width; x++) {
-                // Quantize depth
-                float d = m_Data[x + y*m_Width];
-                d = ((d-m_Min)/(m_Max - m_Min)) * w;
-
-                // Convert to Morton coordinates
-                std::vector<uint8_t> col = DepthEncoder::HilbertToVec((uint16_t)std::round(d));
-                img.setPixel(x, y, qRgb(col[0] * 4, col[1]* 4, col[2]* 4));
-
-                if (splitChannels)
-                {
-                    red.setPixel(x, y, qRgb(col[0] * 4, col[0] * 4, col[0] * 4));
-                    green.setPixel(x, y, qRgb(col[1] * 4, col[1] * 4, col[1] * 4));
-                    blue.setPixel(x, y, qRgb(col[2] * 4, col[2] * 4, col[2] * 4));
-                }
-            }
-        }
-
-        ret.push_back(img);
-        if (splitChannels)
-        {
-            ret.push_back(red);
-            ret.push_back(green);
-            ret.push_back(blue);
-        }
-
-        return ret;
     }
 
     void Encoder::SaveJPEG(const QString& path, const QImage& sourceImage, uint32_t quality)

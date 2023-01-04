@@ -12,14 +12,10 @@ namespace DepthEncoder
     {
     public:
         Decoder(QString filePath);
-        void Decode(QString outPath, EncodingMode mode);
+        Decoder(const uint8_t* data, uint32_t width, uint32_t height);
 
-    private:
-        QImage DecodeNone();
-        QImage DecodeMorton();
-        QImage DecodeTriangle();
-        QImage DecodeHilbert();
-        QImage DecodePhase();
+        void Decode(QString outPath, EncodingMode mode);
+        void Decode(std::vector<uint16_t>& data, EncodingMode mode);
 
     private:
         std::vector<uint8_t> m_Data;

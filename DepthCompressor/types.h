@@ -8,5 +8,4 @@ namespace DepthEncoder
     enum EncodingMode {NONE = 0, TRIANGLE = 1, MORTON = 2, HILBERT = 3, PHASE = 4};
 }
 
-
 #endif // TYPES_H

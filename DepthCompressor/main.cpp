@@ -34,8 +34,9 @@ using namespace std;
 
 void GeneratePics()
 {
-    std::vector<float> data1;
-    std::vector<float> data2;
+    int size = 1000 * 1000;
+    std::vector<float> data1(size), data2(size);
+    std::vector<uint16_t> encoded1(size), encoded2(size), decoded1(size), decoded2(size);
 
     QImage img1(1000, 1000, QImage::Format_ARGB32);
     QImage img2(1000, 1000, QImage::Format_ARGB32);
@@ -55,9 +56,6 @@ void GeneratePics()
     img1 = img1.convertToFormat(QImage::Format_RGB888);
     img2 = img2.convertToFormat(QImage::Format_RGB888);
 
-    data1 = std::vector<float>(1000 * 1000);
-    data2 = std::vector<float>(1000 * 1000);
-
     for (uint32_t i=0; i<1000; i++)
     {
         for (uint32_t j=0; j<1000; j++)
@@ -72,14 +70,14 @@ void GeneratePics()
 
     DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::HILBERT, 100, false);
 
-    encoder1.Encode("artEncoded1.png", props);
-    encoder2.Encode("artEncoded2.png", props);
+    //encoder1.Encode(encoded1, props);
+   // encoder2.Encode(encoded2, props);
 
     DepthEncoder::Decoder artDecoder1("artEncoded1.png.png");
     DepthEncoder::Decoder artDecoder2("artEncoded2.png.png");
 
-    artDecoder1.Decode("artDecoded.png", DepthEncoder::EncodingMode::HILBERT);
-    artDecoder2.Decode("artDecoded2.png", DepthEncoder::EncodingMode::HILBERT);
+    artDecoder1.Decode(decoded1, DepthEncoder::EncodingMode::HILBERT);
+    artDecoder2.Decode(decoded2, DepthEncoder::EncodingMode::HILBERT);
 
     img1.save("artificial1.jpg");
     img2.save("artificial2.jpg");
@@ -90,10 +88,10 @@ int main(int argc, char *argv[])
     //GeneratePics();
 
     DepthEncoder::Encoder encoder(argv[1]);
-    DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::PHASE, 100, false);
+    DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::PHASE, 100, true);
     encoder.Encode("Phase.jpg", props);
 
-    DepthEncoder::Decoder decoder("Phaselq.jpg.jpg");
+    DepthEncoder::Decoder decoder("Phase.jpg");
     decoder.Decode("decodedlq.png", DepthEncoder::EncodingMode::PHASE);
 
     return 0;
