@@ -1,5 +1,7 @@
 #include "depthdecoder.h"
 #include <QImage>
+
+#include <conversions.h>
 #include <jpeg_encoder.h>
 
 namespace DepthEncoder
@@ -33,6 +35,9 @@ namespace DepthEncoder
             case EncodingMode::HILBERT:
                 result = DecodeHilbert();
                 break;
+            case EncodingMode::PHASE:
+                result = DecodePhase();
+                break;
             default:
                 break;
         }
@@ -41,6 +46,24 @@ namespace DepthEncoder
     }
 
     QImage Decoder::DecodeNone() { return QImage();}
+
+    QImage Decoder::DecodePhase()
+    {
+        QImage outImage(m_Width, m_Height, QImage::Format_RGB888);
+
+        for(uint32_t y = 0; y < m_Height; y++) {
+            for(uint32_t x = 0; x < m_Width; x++) {
+                int r = std::round(m_Data[x*3 + y * m_Width*3]);
+                int g = std::round(m_Data[x*3 + y * m_Width*3 + 1]);
+                int b = std::round(m_Data[x*3 + y * m_Width*3 + 2]);
+
+                float d = DepthEncoder::GetPhaseCode(r,g,b) / 255.0f;
+                outImage.setPixel(x, y, qRgb(d,d,d));
+            }
+        }
+
+        return outImage;
+    }
 
     QImage Decoder::DecodeMorton()
     {

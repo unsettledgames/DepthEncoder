@@ -1,7 +1,7 @@
 #ifndef DEPTHDECODER_H
 #define DEPTHDECODER_H
 
-#include <Defs.h>
+#include <types.h>
 
 #include <QString>
 #include <QImage>
@@ -19,6 +19,7 @@ namespace DepthEncoder
         QImage DecodeMorton();
         QImage DecodeTriangle();
         QImage DecodeHilbert();
+        QImage DecodePhase();
 
     private:
         std::vector<uint8_t> m_Data;

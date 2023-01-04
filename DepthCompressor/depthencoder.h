@@ -4,7 +4,7 @@
 #include <QString>
 #include <vector>
 
-#include <Defs.h>
+#include <types.h>
 
 class QImage;
 
@@ -26,7 +26,7 @@ namespace DepthEncoder
     {
     public:
         Encoder(const QString& path);
-        Encoder(const uint8_t* data, uint32_t width, uint32_t height);
+        Encoder(const float* data, uint32_t width, uint32_t height);
         void Encode(const QString& outPath, const EncodingProperties& props);
 
     private:
@@ -36,6 +36,7 @@ namespace DepthEncoder
         std::vector<QImage> EncodeTriangle(bool splitChannels);
         std::vector<QImage> EncodeMorton(bool splitChannels);
         std::vector<QImage> EncodeHilbert(bool splitChannels);
+        std::vector<QImage> EncodePhase(bool splitChannels);
 
         std::vector<uint8_t> MortonToVec(uint16_t point);
         std::vector<uint8_t> HilbertToVec(uint16_t point);

@@ -17,11 +17,12 @@ SOURCES += \
         jpeg_encoder.cpp
 
 HEADERS += \
-        Defs.h \
+        conversions.h \
         depthdecoder.h \
         depthencoder.h \
         jpeg_decoder.h \
-        jpeg_encoder.h
+        jpeg_encoder.h \
+        types.h
 
 
 # Default rules for deployment.

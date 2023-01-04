@@ -17,17 +17,16 @@
 #include <depthdecoder.h>
 
 /** TODO
+ *  - Polish code, remove repetition, probably pass an encoding lambda to Encode instead of
+ *      having multiple functions, or template Encode and Decode
+ *  - Remove vector to represent a color, check if Qt has something, otherwise just def a vec3 class
  *  - Add error calculator
  *  - Add benchmark
  *  - Reduce QImage usage in favor of raw uchar data
  *
- *  BUGS
- *  - Left part of the depthmap is inverted
  *
  *  NOTES
- *  - Not all bits are used, 3 bits are free in case of 8bit components / 16bit depth
  *  - R channel to encode main part, G and B to encode morton / hilbert?
- *  - Compression for Hilbert and Morton may pass through YUV conversion
  *
  */
 
@@ -35,8 +34,8 @@ using namespace std;
 
 void GeneratePics()
 {
-    std::vector<uint8_t> data1;
-    std::vector<uint8_t> data2;
+    std::vector<float> data1;
+    std::vector<float> data2;
 
     QImage img1(1000, 1000, QImage::Format_ARGB32);
     QImage img2(1000, 1000, QImage::Format_ARGB32);
@@ -56,11 +55,20 @@ void GeneratePics()
     img1 = img1.convertToFormat(QImage::Format_RGB888);
     img2 = img2.convertToFormat(QImage::Format_RGB888);
 
-    data1 = std::vector<uint8_t>(img1.bits(), img1.bits() + 1000 * 1000 * 3);
-    data2 = std::vector<uint8_t>(img2.bits(), img2.bits() + 1000 * 1000 * 3);
+    data1 = std::vector<float>(1000 * 1000);
+    data2 = std::vector<float>(1000 * 1000);
 
-    DepthEncoder::Encoder encoder1(img1.bits(), 1000, 1000);
-    DepthEncoder::Encoder encoder2(img2.bits(), 1000, 1000);
+    for (uint32_t i=0; i<1000; i++)
+    {
+        for (uint32_t j=0; j<1000; j++)
+        {
+            data1[j + i*1000] = 65535 * (j / 1000.0f);
+            data2[j + i*1000] = 65535 * (i / 1000.0f + j/1000.0f) / 2.0f;
+        }
+    }
+
+    DepthEncoder::Encoder encoder1(data1.data(), 1000, 1000);
+    DepthEncoder::Encoder encoder2(data2.data(), 1000, 1000);
 
     DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::HILBERT, 100, false);
 
@@ -79,15 +87,14 @@ void GeneratePics()
 
 int main(int argc, char *argv[])
 {
-    GeneratePics();
+    //GeneratePics();
 
     DepthEncoder::Encoder encoder(argv[1]);
-    DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::HILBERT, 100, false);
-    encoder.Encode("Hilbert.jpg", props);
+    DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::PHASE, 100, false);
+    encoder.Encode("Phase.jpg", props);
 
-    DepthEncoder::Decoder decoder("Hilbert.jpg.jpg");
-    decoder.Decode("decoded2.png", DepthEncoder::EncodingMode::HILBERT);
-
+    DepthEncoder::Decoder decoder("Phaselq.jpg.jpg");
+    decoder.Decode("decodedlq.png", DepthEncoder::EncodingMode::PHASE);
 
     return 0;
 }

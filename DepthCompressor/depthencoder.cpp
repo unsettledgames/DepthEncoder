@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <conversions.h>
 #include <jpeg_encoder.h>
 
 #include <iostream>
@@ -63,9 +64,9 @@ namespace DepthEncoder
         }
     }
 
-    Encoder::Encoder(const uint8_t* data, uint32_t width, uint32_t height)
+    Encoder::Encoder(const float* data, uint32_t width, uint32_t height)
     {
-        uint32_t size = width * height * 3;
+        uint32_t size = width * height;
         m_Width = width;
         m_Height = height;
         m_Min = 1e20;
@@ -100,6 +101,11 @@ namespace DepthEncoder
                 break;
             case EncodingMode::HILBERT:
                 toSave = EncodeHilbert(props.SplitChannels);
+                break;
+            case EncodingMode::PHASE:
+                toSave = EncodePhase(props.SplitChannels);
+                break;
+            default:
                 break;
         }
 
@@ -231,6 +237,48 @@ namespace DepthEncoder
                     red.setPixel(x, y, qRgb(Ld, Ld, Ld));
                     green.setPixel(x, y, qRgb(Ha, Ha, Ha));
                     blue.setPixel(x, y, qRgb(Hb, Hb, Hb));
+                }
+            }
+        }
+
+        ret.push_back(img);
+        if (splitChannels)
+        {
+            ret.push_back(red);
+            ret.push_back(green);
+            ret.push_back(blue);
+        }
+
+        return ret;
+    }
+
+    std::vector<QImage> Encoder::EncodePhase(bool splitChannels)
+    {
+        std::vector<QImage> ret;
+        QImage img(m_Width, m_Height, QImage::Format_RGB32);
+        QImage red(m_Width, m_Height, QImage::Format_RGB32);
+        QImage green(m_Width, m_Height, QImage::Format_RGB32);
+        QImage blue(m_Width, m_Height, QImage::Format_RGB32);
+
+        const int w = 65535;
+
+        // Encode depth, save into QImage img
+        for(uint32_t y = 0; y < m_Height; y++) {
+            for(uint32_t x = 0; x < m_Width; x++) {
+                // Quantize depth
+                float d = m_Data[x + y*m_Width];
+                d = ((d-m_Min)/(m_Max - m_Min)) * w;
+
+                // Convert to Morton coordinates
+                std::vector<uint8_t> col = DepthEncoder::PhaseToVec((uint16_t)std::round(d));
+
+                img.setPixel(x, y, qRgb(col[0], col[1], col[2]));
+
+                if (splitChannels)
+                {
+                    red.setPixel(x, y, qRgb(col[0], col[0], col[0]));
+                    green.setPixel(x, y, qRgb(col[1], col[1], col[1]));
+                    blue.setPixel(x, y, qRgb(col[2], col[2], col[2]));
                 }
             }
         }
