@@ -62,36 +62,8 @@ namespace DepthEncoder
                         depth = 0;
                         break;
                     case EncodingMode::TRIANGLE:
-                    {
-                        const int w = 65536;
-                        // Function data
-                        int np = 512;
-                        float p = (float)np / w;
-                        float Ld = m_Data[x*3 + y * m_Width*3] / 255.0;
-                        float Ha = m_Data[x*3 + y * m_Width*3 + 1] / 255.0;
-                        float Hb = m_Data[x*3 + y * m_Width*3 + 2] / 255.0;
-                        int m = (int)std::floor(4.0 * (Ld / p) - 0.5f) % 4;
-                        float L0 = Ld - (fmod( Ld - p/8.0f, p)) + (p/4.0) * m - p/8.0;
-                        float delta = 0;
-
-                        switch (m) {
-                        case 0:
-                            delta = (p/2.0f) * Ha;
-                            break;
-                        case 1:
-                            delta = (p/2.0f) * Hb;
-                            break;
-                        case 2:
-                            delta = (p/2.0f) * (1.0f - Ha);
-                            break;
-                        case 3:
-                            delta = (p/2.0f) * (1.0f - Hb);
-                            break;
-                        }
-
-                        depth = (L0 + delta) * w;
+                        depth = GetTriangleCode(r, g, b);
                         break;
-                    }
                     case EncodingMode::MORTON:
                         depth = GetMortonCode(r, g, b, nbits);
                         break;
@@ -100,6 +72,9 @@ namespace DepthEncoder
                         break;
                     case EncodingMode::PHASE:
                         depth = GetPhaseCode(r, g, b);
+                        break;
+                    case EncodingMode::SPLIT:
+                        depth = GetSplitCode(r, g, b);
                         break;
                     default:
                         break;

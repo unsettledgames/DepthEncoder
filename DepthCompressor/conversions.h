@@ -32,6 +32,9 @@ namespace DepthEncoder
     static int GetTriangleCode(int r, int g, int b);
     static std::vector<uint8_t> TriangleToVec(uint16_t p);
 
+    static int GetSplitCode(int r, int g, int b);
+    static std::vector<uint8_t> SplitToVec(uint16_t p, int nRemovedBits = 0);
+
     // Hilbert transpose
     static void TransposeFromHilbertCoords(uint8_t* X, int nbits, int dim)
     {
@@ -178,12 +181,38 @@ namespace DepthEncoder
 
     static int GetTriangleCode(int r, int g, int b)
     {
-        return 0;
+        const int w = 65536;
+        // Function data
+        int np = 512;
+        float p = (float)np / w;
+        float Ld = r / 255.0f;
+        float Ha = g / 255.0f;
+        float Hb = b / 255.0f;
+        int m = (int)std::floor(4.0 * (Ld / p) - 0.5f) % 4;
+        float L0 = Ld - (fmod( Ld - p/8.0f, p)) + (p/4.0) * m - p/8.0;
+        float delta = 0;
+
+        switch (m) {
+        case 0:
+            delta = (p/2.0f) * Ha;
+            break;
+        case 1:
+            delta = (p/2.0f) * Hb;
+            break;
+        case 2:
+            delta = (p/2.0f) * (1.0f - Ha);
+            break;
+        case 3:
+            delta = (p/2.0f) * (1.0f - Hb);
+            break;
+        }
+
+        return (L0 + delta) * w;
     }
 
     static std::vector<uint8_t> TriangleToVec(uint16_t d)
     {
-        const float w = 65535.0f;
+        const float w = 65536.0f;
         const float p = 512.0f / w;
         std::vector<uint8_t> ret(3);
 
@@ -204,6 +233,50 @@ namespace DepthEncoder
 
         Ld *= 255; Ha *= 255; Hb *= 255;
         ret[0] = Ld; ret[1] = Ha; ret[2] = Hb;
+
+        return ret;
+    }
+
+    static int GetSplitCode(int r, int g, int b)
+    {
+        const int w = 65535;
+        // Function data
+        int np = 512;
+        float p = (float)np / w;
+        float Ld = r / 255.0f;
+        float Ha = g / 255.0f;
+        int m = (int)std::floor(2.0 * (Ld / p)) % 2;
+        float delta = 0;
+
+        switch (m) {
+        case 0:
+            delta = (p/2.0f) * Ha;
+            break;
+        case 1:
+            delta = (p/2.0f) * (1.0f - Ha);
+            break;
+        }
+
+        return (Ld + delta) * w;
+    }
+
+    static std::vector<uint8_t> SplitToVec(uint16_t d, int nRemovedBits/* = 0*/)
+    {
+        const float w = 65535.0f;
+        const float p = 512.0f / w;
+        std::vector<uint8_t> ret(3);
+
+        float Ld, Ha;
+        Ld = d / w;
+
+        float mod = fmod(Ld / p, 2.0f);
+        if (mod <= 1)
+            Ha = mod;
+        else
+            Ha = 2 - mod;
+
+        Ld *= 255; Ha *= 255;
+        ret[0] = Ld; ret[1] = std::round(Ha); ret[2] = 0.0f;
 
         return ret;
     }

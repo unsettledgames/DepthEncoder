@@ -13,8 +13,9 @@ namespace DepthEncoder
     struct EncodingProperties
     {
         EncodingMode Mode = TRIANGLE;
-        uint32_t Quality = 90;
+        uint32_t Quality = 100;
         bool SplitChannels = false;
+        uint32_t RemovedBits = 0;
 
         EncodingProperties() = default;
         EncodingProperties(const EncodingProperties& props) = default;

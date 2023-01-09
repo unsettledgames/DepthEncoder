@@ -193,6 +193,9 @@ namespace DepthEncoder
                     case EncodingMode::PHASE:
                         col = PhaseToVec(d);
                         break;
+                    case EncodingMode::SPLIT:
+                        col = SplitToVec(d, props.RemovedBits);
+                        break;
                     default:
                         break;
                 }
