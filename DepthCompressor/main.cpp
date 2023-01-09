@@ -41,10 +41,8 @@ void GeneratePics()
     float minErr = 1e20;
     float avgErr = 0;
 
-    for (int i=0; i<65535; i++)
+    for (int i=0; i<=65535; i++)
     {
-        if (i == 129)
-            std::cout << "E";
         auto col = DepthEncoder::SplitToVec(i);
         int code = DepthEncoder::GetSplitCode(col[0], col[1], col[2]);
         float err = std::fabs(code - i);
@@ -61,6 +59,7 @@ int main(int argc, char *argv[])
 {
     GeneratePics();
 
+    /*
     DepthEncoder::Encoder encoder(argv[1]);
     DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::SPLIT, 100, false);
     props.RemovedBits = 0;
@@ -69,6 +68,6 @@ int main(int argc, char *argv[])
 
     DepthEncoder::Decoder decoder("Split.jpg");
     decoder.Decode("splitdecoded.png", DepthEncoder::EncodingMode::SPLIT);
-
+*/
     return 0;
 }

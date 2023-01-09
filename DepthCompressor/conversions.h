@@ -239,44 +239,43 @@ namespace DepthEncoder
 
     static int GetSplitCode(int r, int g, int b)
     {
-        const int w = 65535;
-        // Function data
-        int np = 512;
-        float p = (float)np / w;
-        float Ld = r / 255.0f;
-        float Ha = g / 255.0f;
-        int m = (int)std::floor(2.0 * (Ld / p)) % 2;
+        float Ld = r;
+        float Ha = g;
+        int m = (int)r % 2;
         float delta = 0;
 
         switch (m) {
         case 0:
-            delta = (p/2.0f) * Ha;
+            delta = Ha;
             break;
         case 1:
-            delta = (p/2.0f) * (1.0f - Ha);
+            delta = 255.0f - Ha;
             break;
         }
 
-        return (Ld + delta) * w;
+        return Ld * 256.0f + delta;
     }
 
     static std::vector<uint8_t> SplitToVec(uint16_t d, int nRemovedBits/* = 0*/)
     {
-        const float w = 65535.0f;
-        const float p = 512.0f / w;
         std::vector<uint8_t> ret(3);
 
         float Ld, Ha;
-        Ld = d / w;
 
-        float mod = fmod(Ld / p, 2.0f);
+        float mod = fmod(d / 256.0f, 2.0f);
         if (mod <= 1)
             Ha = mod;
         else
-            Ha = 2 - mod;
+            Ha =2 - mod;
 
-        Ld *= 255; Ha *= 255;
-        ret[0] = Ld; ret[1] = std::round(Ha); ret[2] = 0.0f;
+        Ld = d >> 8; Ha *= 255.0f;
+
+        if (mod <= 1)
+            Ha = std::ceil(Ha);
+        else
+            Ha = std::floor(Ha);
+
+        ret[0] = Ld; ret[1] = Ha; ret[2] = 0.0f;
 
         return ret;
     }
