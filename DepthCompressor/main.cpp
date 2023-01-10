@@ -59,15 +59,13 @@ int main(int argc, char *argv[])
 {
     GeneratePics();
 
-    /*
     DepthEncoder::Encoder encoder(argv[1]);
-    DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::SPLIT, 100, false);
+    DepthEncoder::EncodingProperties props(DepthEncoder::EncodingMode::HILBERT, 95, false);
     props.RemovedBits = 0;
 
-    encoder.Encode("Split.jpg", props);
+    encoder.Encode("Hilbert.jpg", props);
 
-    DepthEncoder::Decoder decoder("Split.jpg");
-    decoder.Decode("splitdecoded.png", DepthEncoder::EncodingMode::SPLIT);
-*/
+    DepthEncoder::Decoder decoder("Hilbert.jpg");
+    decoder.Decode("Decoded.png", DepthEncoder::EncodingMode::HILBERT);
     return 0;
 }

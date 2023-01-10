@@ -25,6 +25,8 @@ namespace DepthEncoder
 
     static int GetHilbertCode(int r, int g, int b, int nbits);
     static std::vector<uint8_t> HilbertToVec(uint16_t p);
+    static std::vector<uint8_t> HilbertEnlarge(std::vector<uint8_t> &col);
+    static std::vector<uint8_t> HilbertShrink(std::vector<uint8_t> &col);
 
     static int GetPhaseCode(int r, int g, int b);
     static std::vector<uint8_t> PhaseToVec(uint16_t p);
@@ -118,15 +120,74 @@ namespace DepthEncoder
         return ret;
     }
 
+    static std::vector<uint8_t> HilbertEnlarge(std::vector<uint8_t> &col) {
+        /*col[0] *= 4;
+        col[1] *= 4;
+        col[2] *= 4;
+        return col; */
+        static std::vector<uint8_t> occupancy;
+        static std::vector<uint8_t> remap;
+        if(occupancy.size() == 0) {
+            occupancy.push_back(1);
+            int gap = 1;
+            while(gap < 64) {
+                int end = occupancy.size();
+                for(int i = 0; i < gap; i++)
+                    occupancy.push_back(0);
+                for(int i = 0; i < end; i++)
+                    occupancy.push_back(occupancy[i]);
+                gap *= 2;
+            }
+
+            for(int i = 0; i < occupancy.size(); i++) {
+                if(occupancy[i])
+                    remap.push_back(i);
+            }
+        }
+        for(int k = 0; k < 3; k++)
+            col[k] = remap[col[k]];
+        return col;
+    }
+
+    static std::vector<uint8_t> HilbertShrink(std::vector<uint8_t> &col) {
+        /*col[0] /= 4;
+        col[1] /= 4;
+        col[2] /= 4;
+        return col; */
+        static std::vector<uint8_t> occupancy;
+        static std::vector<uint8_t> remap;
+        if(occupancy.size() == 0) {
+            occupancy.push_back(0);
+            int gap = 1;
+            while(gap < 64) {
+                int end = occupancy.size();
+                int last = occupancy.back();
+                for(int i = 0; i < gap; i++) {
+                    if(i <= gap/2)
+                        occupancy.push_back(last);
+                    else
+                        occupancy.push_back(last+1);
+                }
+                for(int i = 0; i < end; i++)
+                    occupancy.push_back(occupancy[i] + last+1);
+                gap *= 2;
+            }
+        }
+        for(int k = 0; k < 3; k++)
+            col[k] = occupancy[col[k]];
+        return col;
+    }
+
     // To Hilbert and backwards
     static int GetHilbertCode(int r, int g, int b, int nbits)
     {
-        int col[3] = {r,g,b};
+        std::vector<uint8_t> v(3);
+        v[0] = r; v[1] = g; v[2] = b;
+        v = HilbertShrink(v);
+        int col[3] = {v[0], v[1], v[2]};
         TransposeToHilbertCoords(col, nbits, 3);
         return GetMortonCode(col[2], col[1], col[0], nbits);
     }
-
-
 
     // Credits: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
     static std::vector<uint8_t> HilbertToVec(uint16_t p)
@@ -137,7 +198,7 @@ namespace DepthEncoder
         std::swap(v[0], v[2]);
         TransposeFromHilbertCoords(v.data(), nbits, 3);
 
-        return v;
+        return HilbertEnlarge(v);
     }
 
     // To Phase encoding and backwards
