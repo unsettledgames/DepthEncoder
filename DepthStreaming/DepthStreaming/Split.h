@@ -16,9 +16,9 @@ namespace DStream
         if (mod <= 1)
             Ha = mod;
         else
-            Ha =2 - mod;
+            Ha = 2 - mod;
 
-        Ld = ret.x >> 8; Ha *= 255.0f;
+        Ld = val >> 8; Ha *= 255.0f;
 
         if (mod <= 1)
             Ha = std::ceil(Ha);

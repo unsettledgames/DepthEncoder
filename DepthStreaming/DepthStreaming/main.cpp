@@ -17,10 +17,10 @@ int main(int argc, char *argv[])
     std::vector<uint8_t> compressed(dmData.Width * dmData.Height * 3);
     DStream::Compressor compressor(dmData.Width, dmData.Height);
 
-    compressor.Encode(data, compressed.data(), dmData.Width * dmData.Height, DStream::EncodingType::HILBERT);
+    compressor.Encode(data, compressed.data(), dmData.Width * dmData.Height, DStream::EncodingType::SPLIT);
     writer.Write(compressed.data(), dmData.Width, dmData.Height, DStream::OutputFormat::JPG, false, 100);
 
-    compressor.Decode(compressed.data(), data, dmData.Width * dmData.Height, DStream::EncodingType::HILBERT);
+    compressor.Decode(compressed.data(), data, dmData.Width * dmData.Height, DStream::EncodingType::SPLIT);
 
     writer.SetPath("decoded.png");
     writer.Write(data, dmData.Width, dmData.Height, false);
