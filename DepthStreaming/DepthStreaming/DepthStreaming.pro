@@ -6,8 +6,7 @@ CONFIG -= app_bundle
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 win32:LIBS += \
-    $$PWD/../Deps/libjpeg-turbo-2.0.6/lib/jpeg-static.lib
-
+    $$PWD/../Deps/libjpeg-turbo-2.0.6/bin/jpeg62.dll
 win32:INCLUDEPATH += \
     $$PWD/../Deps/libjpeg-turbo-2.0.6/include
 

@@ -5,6 +5,7 @@
 
 namespace DStream
 {
+    // TODO: add NONE format and autodetect the right format depending on file extension
     enum InputFormat { ASC = 0 };
 
     struct DepthmapData
