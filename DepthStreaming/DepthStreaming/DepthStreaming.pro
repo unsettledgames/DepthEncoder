@@ -11,8 +11,13 @@ win32:INCLUDEPATH += \
     $$PWD/../Deps/libjpeg-turbo-2.0.6/include
 
 SOURCES += \
-        Compressor.cpp \
+        Hilbert.cpp \
+        Morton.cpp \
+        Packed.cpp \
         Parser.cpp \
+        Phase.cpp \
+        Split.cpp \
+        Triangle.cpp \
         Writer.cpp \
         jpeg_decoder.cpp \
         jpeg_encoder.cpp \
@@ -24,10 +29,10 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
 HEADERS += \
-    Algorithms.h \
-    Compressor.h \
+    Algorithm.h \
     Hilbert.h \
     Morton.h \
+    Packed.h \
     Parser.h \
     Phase.h \
     Split.h \

@@ -31,7 +31,7 @@ namespace DStream
         return true;
     }
 
-    bool Writer::Write(uint16_t* data, uint32_t width, uint32_t height, bool splitChannels/* = false*/)
+    bool Writer::Write(uint16_t* data, uint32_t width, uint32_t height)
     {
         QImage out(width, height, QImage::Format_RGB888);
 

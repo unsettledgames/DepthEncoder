@@ -1,7 +1,12 @@
 #include <Parser.h>
-#include <Compressor.h>
 #include <Writer.h>
-#include <Algorithms.h>
+
+#include <Hilbert.h>
+#include <Morton.h>
+#include <Split.h>
+#include <Phase.h>
+#include <Triangle.h>
+#include <Packed.h>
 
 #include <QImage>
 #include <iostream>
@@ -12,6 +17,7 @@
 
 using namespace DStream;
 
+/*
 void ImageBenchmark()
 {
     EncodingType encodingTypes[N_TO_TEST] = {EncodingType::TRIANGLE, EncodingType::SPLIT,
@@ -145,6 +151,7 @@ void RangeBenchmark()
         std::cout << "Max error: " << maxErr << ", average error: " << avgErr / 65535.0f << std::endl;
     }
 }
+*/
 
 void RemoveNoise(const std::string& fileName, uint32_t width, uint32_t height)
 {
@@ -170,45 +177,43 @@ void RemoveNoise(const std::string& fileName, uint32_t width, uint32_t height)
                 int distanceMatrix[4][4];
                 int outlierThreshold = 32;
 
-                // Remove the neihbor with the max distance from the other ones, if said distance is more than the threshold
                 for (int i=0; i<4; i++)
                     for (int j=0; j<4; j++)
                         distanceMatrix[i][j] = std::abs(neighbors[i] - neighbors[j]);
 
-                bool outlier = false;
+                int outliers = 0;
                 // Check if there's an outlier
                 for (uint32_t i=0; i<4; i++)
                     if (distanceMatrix[i][0] > outlierThreshold)
-                        outlier = true;
+                        outliers++;
 
-                // Find the right outlier (for each neighbor, return the one with the biggest row + column sum)
-                int maxSum = -1;
-                int maxIdx = -1;
-                if (outlier)
+                // Find the right outliers (for each neighbor, return the one with the biggest row + column sum)
+                std::vector<int> outliersIdx;
+                for (uint32_t i=0; i<outliers; i++)
                 {
-                    for (uint32_t i=0; i<4; i++)
+                    int maxSum = -1;
+                    for (uint32_t j=0; j<4; j++)
                     {
                         // Compute row + column
                         int row = 0, col = 0;
                         for (uint32_t k=0; k<4; k++)
                         {
-                            row += distanceMatrix[i][k];
-                            col += distanceMatrix[k][i];
+                            row += distanceMatrix[j][k];
+                            col += distanceMatrix[k][j];
                         }
 
-                        if ((row + col) > maxSum)
+                        if ((row + col) > maxSum && !std::count(outliersIdx.begin(), outliersIdx.end(), j))
                         {
-                            maxIdx = i;
+                            outliersIdx.push_back(j);
                             maxSum = row + col;
                         }
                     }
                 }
 
-
                 // Compute the average withouit maxIdx
-                float avg = 0; float divisor = maxIdx == -1 ? 4 : 3;
+                float avg = 0; float divisor = 4 - outliersIdx.size();
                 for (uint32_t i=0; i<4; i++)
-                    if (i != maxIdx)
+                    if (!std::count(outliersIdx.begin(), outliersIdx.end(), i))
                         avg += neighbors[i];
                 avg /= divisor;
 
@@ -238,10 +243,10 @@ int main(int argc, char *argv[])
     data = parser.Parse(dmData);
 
     std::vector<uint8_t> compressed(dmData.Width * dmData.Height * 3);
-    Compressor compressor(dmData.Width, dmData.Height);
+    Triangle compressor(16);
 
-    compressor.Encode(data, compressed.data(), dmData.Width * dmData.Height, EncodingType::HILBERT);
-    writer.Write(compressed.data(), dmData.Width, dmData.Height, OutputFormat::JPG, false, 80);
+    compressor.Encode(data, compressed.data(), dmData.Width * dmData.Height);
+    writer.Write(compressed.data(), dmData.Width, dmData.Height, OutputFormat::JPG, false, 100);
 
     // Load encoded image
     QImage img("encoded.jpg");
@@ -249,12 +254,12 @@ int main(int argc, char *argv[])
     memcpy(compressed.data(), img.bits(), 3 * dmData.Width * dmData.Height);
 
     // Decode it
-    compressor.Decode(compressed.data(), data, dmData.Width * dmData.Height, EncodingType::HILBERT);
+    compressor.Decode(compressed.data(), data, dmData.Width * dmData.Height);
 
-    writer.SetPath("decoded.png");
-    writer.Write(data, dmData.Width, dmData.Height, false);
+    writer.SetPath("decodedPerfect.png");
+    writer.Write(data, dmData.Width, dmData.Height);
 
-    RemoveNoise("decoded.png", dmData.Width, dmData.Height);
+    RemoveNoise("decodedPerfect.png", dmData.Width, dmData.Height);
 
     delete[] data;
     return 0;
