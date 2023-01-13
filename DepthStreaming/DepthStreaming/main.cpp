@@ -146,9 +146,88 @@ void RangeBenchmark()
     }
 }
 
+void RemoveNoise(const std::string& fileName, uint32_t width, uint32_t height)
+{
+    QImage input(QString(fileName.c_str()));
+    QImage output(width, height, QImage::Format_RGB888);
+    input = input.convertToFormat(QImage::Format_RGB888);
+
+    for (uint32_t y=0; y<height; y++)
+    {
+        for (uint32_t x=0; x<width; x++)
+        {
+            if (y != 0 && x != 0 && x != (width-1) && y != (height-1))
+            {
+                int current = qRed(input.pixel(x, y));
+                // Get all neighbors
+                std::vector<int> neighbors;
+                neighbors.push_back(qRed(input.pixel(x, y + 1)));
+                neighbors.push_back(qRed(input.pixel(x, y-1)));
+                neighbors.push_back(qRed(input.pixel(x-1, y)));
+                neighbors.push_back(qRed(input.pixel(x+1, y)));
+
+                // Compute distance matrix
+                int distanceMatrix[4][4];
+                int outlierThreshold = 32;
+
+                // Remove the neihbor with the max distance from the other ones, if said distance is more than the threshold
+                for (int i=0; i<4; i++)
+                    for (int j=0; j<4; j++)
+                        distanceMatrix[i][j] = std::abs(neighbors[i] - neighbors[j]);
+
+                bool outlier = false;
+                // Check if there's an outlier
+                for (uint32_t i=0; i<4; i++)
+                    if (distanceMatrix[i][0] > outlierThreshold)
+                        outlier = true;
+
+                // Find the right outlier (for each neighbor, return the one with the biggest row + column sum)
+                int maxSum = -1;
+                int maxIdx = -1;
+                if (outlier)
+                {
+                    for (uint32_t i=0; i<4; i++)
+                    {
+                        // Compute row + column
+                        int row = 0, col = 0;
+                        for (uint32_t k=0; k<4; k++)
+                        {
+                            row += distanceMatrix[i][k];
+                            col += distanceMatrix[k][i];
+                        }
+
+                        if ((row + col) > maxSum)
+                        {
+                            maxIdx = i;
+                            maxSum = row + col;
+                        }
+                    }
+                }
+
+
+                // Compute the average withouit maxIdx
+                float avg = 0; float divisor = maxIdx == -1 ? 4 : 3;
+                for (uint32_t i=0; i<4; i++)
+                    if (i != maxIdx)
+                        avg += neighbors[i];
+                avg /= divisor;
+
+                float err = std::abs(current - avg);
+
+                if (err > 8)
+                    output.setPixel(x, y, qRgb(avg, avg, avg));
+                else
+                    output.setPixel(x, y, qRgb(current, current, current));
+            }
+        }
+    }
+
+    output.save(QString((fileName + "polished.png").c_str()));
+}
+
 int main(int argc, char *argv[])
 {
-    ImageBenchmark();
+    //ImageBenchmark();
     //RangeBenchmark();
 
     uint16_t* data = nullptr;
@@ -161,13 +240,21 @@ int main(int argc, char *argv[])
     std::vector<uint8_t> compressed(dmData.Width * dmData.Height * 3);
     Compressor compressor(dmData.Width, dmData.Height);
 
-    compressor.Encode(data, compressed.data(), dmData.Width * dmData.Height, EncodingType::SPLIT);
-    writer.Write(compressed.data(), dmData.Width, dmData.Height, OutputFormat::JPG, false, 100);
+    compressor.Encode(data, compressed.data(), dmData.Width * dmData.Height, EncodingType::HILBERT);
+    writer.Write(compressed.data(), dmData.Width, dmData.Height, OutputFormat::JPG, false, 80);
 
-    compressor.Decode(compressed.data(), data, dmData.Width * dmData.Height, EncodingType::SPLIT);
+    // Load encoded image
+    QImage img("encoded.jpg");
+    img = img.convertToFormat(QImage::Format_RGB888);
+    memcpy(compressed.data(), img.bits(), 3 * dmData.Width * dmData.Height);
+
+    // Decode it
+    compressor.Decode(compressed.data(), data, dmData.Width * dmData.Height, EncodingType::HILBERT);
 
     writer.SetPath("decoded.png");
     writer.Write(data, dmData.Width, dmData.Height, false);
+
+    RemoveNoise("decoded.png", dmData.Width, dmData.Height);
 
     delete[] data;
     return 0;

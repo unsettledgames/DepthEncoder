@@ -4,6 +4,7 @@
 #include <Vec3.h>
 #include <Morton.h>
 
+#include <iostream>
 #include <vector>
 
 /** POSSIBLE ISSUES:
@@ -50,6 +51,7 @@ namespace DStream
         uint32_t M = 1 << (nbits - 1), P, Q, t;
 
         // Inverse undo
+
         for (Q = M; Q > 1; Q >>= 1) {
             P = Q - 1;
             for (int i = 0; i < dim; i++)
@@ -130,6 +132,8 @@ namespace DStream
         }
         for(int k = 0; k < 3; k++)
             ret[k] = occupancy[ret[k]];
+
+        //std::cout << "Occupancy size: " << occupancy.size() << std::endl;
         return ret;
     }
 
