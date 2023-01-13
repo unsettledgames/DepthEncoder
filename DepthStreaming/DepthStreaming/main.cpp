@@ -12,146 +12,108 @@
 #include <iostream>
 #include <vector>
 
-#define N_TO_TEST   5
-#define N_TEST_PICS 1
+#ifndef _WIN32
+#include <unistd.h>
+#else
+#include <stdio.h>
+#include <string.h>
+int opterr = 1, optind = 1, optopt, optreset;
+const char* optarg;
+int getopt(int nargc, char* const nargv[], const char* ostr);
+#endif
 
 using namespace DStream;
+using namespace std;
 
-/*
-void ImageBenchmark()
+/** TODO LIST:
+ *  - Support PNG
+ */
+
+
+void Usage()
 {
-    EncodingType encodingTypes[N_TO_TEST] = {EncodingType::TRIANGLE, EncodingType::SPLIT,
-            EncodingType::MORTON, EncodingType::HILBERT, EncodingType::PHASE};
-    std::string encodingLabels[N_TO_TEST] = {"Triangle", "Split", "Morton", "Hilbert", "Phase"};
-    uint32_t jpegQualityDecrease = 20;
-    uint32_t minJpegQuality = 20;
-    uint32_t maxJpegQuality = 100;
+    cerr <<
+    R"use(Usage: dstreambenchmark [OPTIONS] <FILE>
 
-    std::string testImages[N_TEST_PICS] = {"envoi_RTI/MNT.asc"};
+    FILE is the path to the ASC file containing the depth data
+      -d <output>: output folder in which data will be saved
+      -a <algorithm>: algorithm to be tested (algorithm names: PACKING,TRIANGLE,MORTON,HILBERT,PHASE,SPLIT), if not specified, all of them will be tested
+      -q <quality>: JPEG quality to be used (if not specified, values 80,85,90,95,100 will be tested)
+      -f <format>: output format (JPEG or PNG), defaults to JPEG
+      -?: display this message
 
-    // Test per image, then try all the algos on it
-
-    for (uint32_t i=0; i<N_TO_TEST; i++)
-    {
-        std::cout << "TESTING ALGORITHM " << encodingLabels[i] << std::endl;
-
-        for (uint32_t j=0; j<N_TEST_PICS; j++)
-        {
-            std::cout << "TESTING IMAGE " << testImages[j] << std::endl;
-
-            for (uint32_t q=maxJpegQuality; q>=minJpegQuality; q-=jpegQualityDecrease)
-            {
-                std::cout << "JPEG QUALITY: " << q << std::endl;
-
-                // Get heightmap data
-                Parser parser("envoi_RTI/MNT.asc", InputFormat::ASC);
-                DepthmapData dmData;
-                Writer writer("tmp.jpg");
-                uint16_t* heightData = parser.Parse(dmData);
-
-                std::vector<uint16_t> decodedData(dmData.Width * dmData.Height);
-                std::vector<uint8_t> encodedData(3 * dmData.Width * dmData.Height);
-
-                // Encode
-                Compressor compressor(dmData.Width, dmData.Height);
-                compressor.Encode(heightData, encodedData.data(), dmData.Width * dmData.Height, encodingTypes[i]);
-                writer.Write(encodedData.data(), dmData.Width, dmData.Height, OutputFormat::JPG, false, q);
-
-                // Read encoded image
-                QImage img("tmp.jpg");
-                img = img.convertToFormat(QImage::Format_RGB888);
-                memcpy(encodedData.data(), img.bits(), 3 * dmData.Width * dmData.Height);
-
-                // Decode
-                compressor.Decode(encodedData.data(), decodedData.data(), dmData.Width * dmData.Height, encodingTypes[i]);
-
-                // Measure error
-                float max = -1e20;
-                float avg = 0;
-
-                for (uint32_t s=0; s<dmData.Width * dmData.Height; s++)
-                {
-                    float err = std::abs(heightData[s] - decodedData[s]);
-                    max = std::max<float>(err, max);
-                    avg += err;
-                }
-                avg /= dmData.Width * dmData.Height;
-
-                std::cout << "Max error: " << max << "\nAverage error: " << avg << std::endl;
-            }
-        }
-    }
+    )use";
 }
 
-void RangeBenchmark()
+
+int ParseOptions(int argc, char** argv, string& inputFile, string& outFolder, string& algo, uint32_t& quality, string& outFormat)
 {
-    EncodingType modes[N_TO_TEST] = {EncodingType::HILBERT,EncodingType::MORTON,
-                                              EncodingType::PHASE, EncodingType::TRIANGLE,
-                                              EncodingType::SPLIT};
+    int c;
 
-    std::string labels[N_TO_TEST] = {"Hilbert", "Morton", "Phase", "Triangle", "Split"};
-
-    for (int t=0; t<N_TO_TEST; t++)
-    {
-        std::cout << "TESTING " << labels[t] << std::endl;
-        float maxErr = -1e20;
-        float avgErr = 0;
-
-        for (int i=0; i<=65535; i++)
+    while ((c = getopt(argc, argv, "d:a::q::f::")) != -1) {
+        switch (c) {
+        case 'd':
         {
-            Color encoded;
-
-            switch (modes[t])
-            {
-            case EncodingType::TRIANGLE:
-                encoded = TriangleToColor(i);
-                break;
-            case EncodingType::MORTON:
-                encoded = MortonToColor(i, CurveOrder<uint16_t>());
-                break;
-            case EncodingType::HILBERT:
-                encoded = HilbertToColor(i, CurveOrder<uint16_t>());
-                break;
-            case EncodingType::PHASE:
-                encoded = PhaseToColor(i);
-                break;
-            case EncodingType::SPLIT:
-                encoded = SplitToColor(i);
-                break;
-            }
-
-            uint16_t decoded;
-
-            switch (modes[t])
-            {
-            case EncodingType::TRIANGLE:
-                decoded = ColorToTriangle(encoded);
-                break;
-            case EncodingType::MORTON:
-                decoded = ColorToMorton(encoded, CurveOrder<uint16_t>());
-                break;
-            case EncodingType::HILBERT:
-                decoded = ColorToHilbert(encoded, CurveOrder<uint16_t>());
-                break;
-            case EncodingType::PHASE:
-                decoded = ColorToPhase(encoded);
-                break;
-            case EncodingType::SPLIT:
-                decoded = ColorToSplit(encoded);
-                break;
-            default:
-                break;
-            }
-
-            float err = std::abs(decoded - i);
-            avgErr += err;
-            maxErr = std::max(err, maxErr);
+            outFolder = optarg;
+            break;
         }
+        case 'a':
+        {
+            std::string arg(optarg);
+            if (arg=="PACKING" || arg=="TRIANGLE" || arg=="MORTON" || arg=="HILBERT" || arg=="PHASE" || arg=="SPLIT")
+            {
+                algo = optarg;
+                break;
+            }
+            else
+            {
+                cerr << "Unknown algorithm " << arg << endl;
+                Usage();
+                return -1;
+            }
 
-        std::cout << "Max error: " << maxErr << ", average error: " << avgErr / 65535.0f << std::endl;
+        }
+        case 'q':
+        {
+            int q = atoi(optarg);
+            if (q >= 0 && q <= 100)
+                quality = q;
+            break;
+        }
+        case 'f':
+        {
+            std::string fmt(optarg);
+            if (fmt=="JPEG" || fmt=="PNG")
+                outFormat = optarg;
+            break;
+        }
+        case '?': Usage(); return -1;
+        default:
+            cerr << "Unknown option: " << (char)c << endl;
+            Usage();
+            return -2;
+        }
     }
+    if (optind == argc) {
+        cerr << "Missing filename" << endl;
+        Usage();
+        return -3;
+    }
+
+    if (optind != argc - 1) {
+#ifdef _WIN32
+        cerr << "Too many arguments or argument before other options\n";
+#else
+        cerr << "Too many arguments\n";
+#endif
+        Usage();
+        return -4;
+    }
+
+    inputFile = argv[optind];
+    return 0;
 }
-*/
+
 
 void RemoveNoise(const std::string& fileName, uint32_t width, uint32_t height)
 {
@@ -232,8 +194,24 @@ void RemoveNoise(const std::string& fileName, uint32_t width, uint32_t height)
 
 int main(int argc, char *argv[])
 {
-    //ImageBenchmark();
-    //RangeBenchmark();
+    string inputFile = "", outFolder = "", algo = "", outFormat = "JPG";
+    uint32_t quality = 100;
+
+    if (ParseOptions(argc, argv, inputFile, outFolder, algo, quality, outFormat) < 0)
+    {
+        cout << "Error parsing command line arguments.\n";
+        return -1;
+    }
+
+    // Comprimi con algoritmo, usa quantizzazione specificata
+    // Decomprimi, confronta con dati originali non quantizzati
+    // Salva codifica in JPEG
+    // Leggi JPEG, decomprimi, confronta con dati quantizzati
+    // Salva decodifica in PNG
+    // Rimuovi outlier, confronta con dati quantizzati
+
+    // Ogni volta che si "confronta", generare texture e istogramma degli errori
+
 
     uint16_t* data = nullptr;
     DepthmapData dmData;
@@ -264,3 +242,62 @@ int main(int argc, char *argv[])
     delete[] data;
     return 0;
 }
+
+
+#ifdef _WIN32
+
+int getopt(int nargc, char* const nargv[], const char* ostr) {
+    static const char* place = "";        // option letter processing
+    const char* oli;                      // option letter list index
+
+    if (optreset || !*place) {             // update scanning pointer
+        optreset = 0;
+        if (optind >= nargc || *(place = nargv[optind]) != '-') {
+            place = "";
+            return -1;
+        }
+
+        if (place[1] && *++place == '-') { // found "--"
+            ++optind;
+            place = "";
+            return -1;
+        }
+    }                                       // option letter okay?
+
+    if ((optopt = (int)*place++) == (int)':' || !(oli = strchr(ostr, optopt))) {
+        // if the user didn't specify '-' as an option,  assume it means -1.
+        if (optopt == (int)'-')
+            return (-1);
+        if (!*place)
+            ++optind;
+        if (opterr && *ostr != ':')
+            cout << "illegal option -- " << optopt << "\n";
+        return ('?');
+    }
+
+    if (*++oli != ':') {                    // don't need argument
+        optarg = NULL;
+        if (!*place)
+            ++optind;
+
+    }
+    else {                                // need an argument
+        if (*place)                         // no white space
+            optarg = place;
+        else if (nargc <= ++optind) {       // no arg
+            place = "";
+            if (*ostr == ':')
+                return (':');
+            if (opterr)
+                cout << "option requires an argument -- " << optopt << "\n";
+            return (':');
+        }
+        else                              // white space
+            optarg = nargv[optind];
+        place = "";
+        ++optind;
+    }
+    return optopt;                          // dump back option letter
+}
+
+#endif
