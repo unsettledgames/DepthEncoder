@@ -1,4 +1,4 @@
-CONFIG += c++11 console
+CONFIG += c++17 console
 CONFIG -= app_bundle
 
 # You can make your code fail to compile if it uses deprecated APIs.
@@ -11,13 +11,13 @@ win32:INCLUDEPATH += \
     $$PWD/../Deps/libjpeg-turbo-2.0.6/include
 
 SOURCES += \
-        Hilbert.cpp \
-        Morton.cpp \
-        Packed.cpp \
+        HilbertCoder.cpp \
+        MortonCoder.cpp \
+        PackedCoder.cpp \
         Parser.cpp \
-        Phase.cpp \
-        Split.cpp \
-        Triangle.cpp \
+        PhaseCoder.cpp \
+        SplitCoder.cpp \
+        TriangleCoder.cpp \
         Writer.cpp \
         jpeg_decoder.cpp \
         jpeg_encoder.cpp \
@@ -30,13 +30,13 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 
 HEADERS += \
     Algorithm.h \
-    Hilbert.h \
-    Morton.h \
-    Packed.h \
+    HilbertCoder.h \
+    MortonCoder.h \
+    PackedCoder.h \
     Parser.h \
-    Phase.h \
-    Split.h \
-    Triangle.h \
+    PhaseCoder.h \
+    SplitCoder.h \
+    TriangleCoder.h \
     Vec3.h \
     Writer.h \
     jpeg_decoder.h \

@@ -1,15 +1,16 @@
-#ifndef SPLIT_H
-#define SPLIT_H
+#ifndef TRIANGLECODER_H
+#define TRIANGLECODER_H
 
 #include <Vec3.h>
 #include <Algorithm.h>
 
+
 namespace DStream
 {
-    class Split : public Algorithm
+    class TriangleCoder : public Algorithm
     {
     public:
-        Split(int q);
+        TriangleCoder(int q);
 
         void Encode(uint16_t* values, uint8_t* dest, uint32_t count);
         void Decode(uint8_t* values, uint16_t* dest, uint32_t count);
@@ -19,4 +20,4 @@ namespace DStream
     };
 }
 
-#endif // SPLIT_H
+#endif // TRIANGLECODER_H

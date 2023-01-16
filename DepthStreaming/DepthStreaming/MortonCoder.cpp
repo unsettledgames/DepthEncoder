@@ -1,11 +1,11 @@
-#include <Morton.h>
+#include <MortonCoder.h>
 // Credits for Morton convertions: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
 
 namespace DStream
 {
-    Morton::Morton(int q, int nbits) : Algorithm(q), m_NBits(nbits){}
+    MortonCoder::MortonCoder(uint32_t q, uint32_t curveBits) : Algorithm(q), m_CurveBits(curveBits) {}
 
-    void Morton::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
+    void MortonCoder::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
     {
         for (uint32_t i=0; i<count; i++)
         {
@@ -16,7 +16,7 @@ namespace DStream
         }
     }
 
-    void Morton::Decode(uint8_t* values, uint16_t* dest, uint32_t count)
+    void MortonCoder::Decode(uint8_t* values, uint16_t* dest, uint32_t count)
     {
         for (uint32_t i=0; i<count; i++)
         {
@@ -25,12 +25,12 @@ namespace DStream
         }
     }
 
-    Color Morton::ValueToColor(uint16_t val)
+    Color MortonCoder::ValueToColor(uint16_t val)
     {
         Color ret;
         ret[0] = 0; ret[1] = 0; ret[2] = 0;
 
-        for (unsigned int i = 0; i <= m_NBits; ++i) {
+        for (unsigned int i = 0; i <= m_CurveBits; ++i) {
             uint8_t selector = 1;
             unsigned int shift_selector = 3 * i;
             unsigned int shiftback = 2 * i;
@@ -42,11 +42,11 @@ namespace DStream
         return ret;
     }
 
-    uint16_t Morton::ColorToValue(const Color& col)
+    uint16_t MortonCoder::ColorToValue(const Color& col)
     {
         int codex = 0, codey = 0, codez = 0;
 
-        const int nbits2 = 2 * m_NBits;
+        const int nbits2 = 2 * m_CurveBits;
 
         for (int i = 0, andbit = 1; i < nbits2; i += 2, andbit <<= 1) {
             codex |= (int)(col.x & andbit) << i;

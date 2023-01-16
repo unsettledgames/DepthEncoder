@@ -1,14 +1,14 @@
-#include <Hilbert.h>
-#include <Morton.h>
+#include <HilbertCoder.h>
+#include <MortonCoder.h>
 
 #include <vector>
 
 namespace DStream
 {
-    Hilbert::Hilbert(int q, int nbits, bool optimizeSpacing/* = false*/) : Algorithm(q),
-        m_NBits(nbits), m_OptimizeSpacing(optimizeSpacing){}
+    HilbertCoder::HilbertCoder(uint32_t q, uint32_t curveBits, bool optimizeSpacing/* = false*/) : Algorithm(q),
+        m_CurveBits(curveBits), m_OptimizeSpacing(optimizeSpacing){}
 
-    void Hilbert::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
+    void HilbertCoder::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
     {
         for (uint32_t i=0; i<count; i++)
         {
@@ -19,7 +19,7 @@ namespace DStream
         }
     }
 
-    void Hilbert::Decode(uint8_t* values, uint16_t* dest, uint32_t count)
+    void HilbertCoder::Decode(uint8_t* values, uint16_t* dest, uint32_t count)
     {
         for (uint32_t i=0; i<count; i++)
         {
@@ -28,10 +28,10 @@ namespace DStream
         }
     }
 
-    void Hilbert::TransposeFromHilbertCoords(Color& col, int dim)
+    void HilbertCoder::TransposeFromHilbertCoords(Color& col, int dim)
     {
         int X[3] = {col.x, col.y, col.z};
-        uint32_t N = 2 << (m_NBits - 1), P, Q, t;
+        uint32_t N = 2 << (m_CurveBits - 1), P, Q, t;
 
         // Gray decode by H ^ (H/2)
         t = X[dim - 1] >> 1;
@@ -55,10 +55,10 @@ namespace DStream
         col.x = X[0]; col.y = X[1]; col.z = X[2];
     }
 
-    void Hilbert::TransposeToHilbertCoords(Color& col, int dim)
+    void HilbertCoder::TransposeToHilbertCoords(Color& col, int dim)
     {
         int X[3] = {col.x, col.y, col.z};
-        uint32_t M = 1 << (m_NBits - 1), P, Q, t;
+        uint32_t M = 1 << (m_CurveBits - 1), P, Q, t;
 
         // Inverse undo
 
@@ -84,7 +84,7 @@ namespace DStream
         col.x = X[0]; col.y = X[1]; col.z = X[2];
     }
 
-    Color Hilbert::Enlarge(Color col)
+    Color HilbertCoder::Enlarge(Color col)
     {
         Color ret = col;
         static std::vector<uint8_t> occupancy;
@@ -111,7 +111,7 @@ namespace DStream
         return ret;
     }
 
-    Color Hilbert::Shrink(Color col)
+    Color HilbertCoder::Shrink(Color col)
     {
         static std::vector<uint8_t> occupancy;
         static std::vector<uint8_t> remap;
@@ -140,10 +140,10 @@ namespace DStream
         return ret;
     }
 
-    Color Hilbert::ValueToColor(uint16_t val)
+    Color HilbertCoder::ValueToColor(uint16_t val)
     {
         // TODO: static? Have it as an attribute?
-        Morton m(m_NBits, m_Quantization);
+        MortonCoder m(m_Quantization, m_CurveBits);
         Color v = m.ValueToColor(val);
         std::swap(v[0], v[2]);
         TransposeFromHilbertCoords(v, 3);
@@ -151,9 +151,9 @@ namespace DStream
         return Enlarge(v);
     }
 
-    uint16_t Hilbert::ColorToValue(const Color& col)
+    uint16_t HilbertCoder::ColorToValue(const Color& col)
     {
-        Morton m(m_NBits, m_Quantization);
+        MortonCoder m(m_Quantization, m_CurveBits);
         Color v = Shrink(col);
         TransposeToHilbertCoords(v, 3);
         std::swap(v[0], v[2]);

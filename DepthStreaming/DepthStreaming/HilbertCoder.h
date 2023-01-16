@@ -1,5 +1,5 @@
-#ifndef HILBERT_H
-#define HILBERT_H
+#ifndef HILBERTCODER_H
+#define HILBERTCODER_H
 
 #include <Algorithm.h>
 #include <Vec3.h>
@@ -8,10 +8,10 @@
 
 namespace DStream
 {
-    class Hilbert : public Algorithm
+    class HilbertCoder : public Algorithm
     {
     public:
-        Hilbert(int q, int nbits, bool optimizeSpacing = false);
+        HilbertCoder(uint32_t q, uint32_t curveBits, bool optimizeSpacing = false);
         void Encode(uint16_t* values, uint8_t* dest, uint32_t count);
         void Decode(uint8_t* values, uint16_t* dest, uint32_t count);
 
@@ -27,9 +27,9 @@ namespace DStream
         Color Shrink(Color col);
 
     private:
-        int m_NBits;
+        uint32_t m_CurveBits;
         bool m_OptimizeSpacing;
     };
 }
 
-#endif // HILBERT_H
+#endif // HILBERTCODER_H

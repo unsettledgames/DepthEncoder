@@ -1,6 +1,8 @@
 #ifndef ALGORITHM_H
 #define ALGORITHM_H
 
+#include <cstdint>
+
 namespace DStream
 {
     class Algorithm
@@ -12,7 +14,7 @@ namespace DStream
         inline int GetQuantization() {return m_Quantization;}
 
     protected:
-        int m_Quantization;
+        uint32_t m_Quantization;
     };
 }
 

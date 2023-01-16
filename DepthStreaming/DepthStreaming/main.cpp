@@ -1,16 +1,18 @@
 #include <Parser.h>
 #include <Writer.h>
 
-#include <Hilbert.h>
-#include <Morton.h>
-#include <Split.h>
-#include <Phase.h>
-#include <Triangle.h>
-#include <Packed.h>
+#include <HilbertCoder.h>
+#include <MortonCoder.h>
+#include <SplitCoder.h>
+#include <PhaseCoder.h>
+#include <TriangleCoder.h>
+#include <PackedCoder.h>
 
 #include <QImage>
 #include <iostream>
+#include <fstream>
 #include <vector>
+#include <filesystem>
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -37,7 +39,7 @@ void Usage()
 
     FILE is the path to the ASC file containing the depth data
       -d <output>: output folder in which data will be saved
-      -a <algorithm>: algorithm to be tested (algorithm names: PACKING,TRIANGLE,MORTON,HILBERT,PHASE,SPLIT), if not specified, all of them will be tested
+      -a <algorithm>: algorithm to be tested (algorithm names: PACKED,TRIANGLE,MORTON,HILBERT,PHASE,SPLIT), if not specified, all of them will be tested
       -q <quality>: JPEG quality to be used (if not specified, values 80,85,90,95,100 will be tested)
       -f <format>: output format (JPEG or PNG), defaults to JPEG
       -?: display this message
@@ -54,13 +56,19 @@ int ParseOptions(int argc, char** argv, string& inputFile, string& outFolder, st
         switch (c) {
         case 'd':
         {
-            outFolder = optarg;
+            if (!filesystem::exists(outFolder) || filesystem::is_empty(outFolder))
+                outFolder = optarg;
+            else
+            {
+                cerr << "Output folder MUST be empty" << endl;
+                return -5;
+            }
             break;
         }
         case 'a':
         {
             std::string arg(optarg);
-            if (arg=="PACKING" || arg=="TRIANGLE" || arg=="MORTON" || arg=="HILBERT" || arg=="PHASE" || arg=="SPLIT")
+            if (arg=="PACKED" || arg=="TRIANGLE" || arg=="MORTON" || arg=="HILBERT" || arg=="PHASE" || arg=="SPLIT")
             {
                 algo = optarg;
                 break;
@@ -192,16 +200,169 @@ void RemoveNoise(const std::string& fileName, uint32_t width, uint32_t height)
     output.save(QString((fileName + "polished.png").c_str()));
 }
 
+QVector<QRgb> LoadColorMap(string path)
+{
+    if (!filesystem::exists(path))
+        return {};
+
+    FILE* inFile = fopen(path.c_str(), "r");
+    string line;
+    QVector<QRgb> ret(256);
+
+    fscanf(inFile, "%s\n", line.c_str());
+    for (uint32_t i=0; i<256; i++)
+    {
+        float scalar;
+        int r, g, b;
+
+        fscanf(inFile, "%f,%d,%d,%d\n", &scalar, &r, &g, &b);
+        ret[i] = qRgb(r,g,b);
+    }
+
+    return ret;
+}
+
+void SaveError(const std::string& outPath, uint16_t* originalData, uint16_t* decodedData, uint32_t width, uint32_t height, QVector<QRgb> colorMap)
+{
+    uint32_t nElements = width * height;
+    vector<uint16_t> errorTextureData(nElements);
+    QImage errorTexture(width, height, QImage::Format_Indexed8);
+    errorTexture.setColorTable(colorMap);
+    float maxErr = -1e20;
+    float avgErr = 0.0f;
+
+    // Compute error between decoded and original data
+    for (uint32_t e=0; e<nElements; e++)
+    {
+        // Save errors
+        float err = abs(originalData[e] - decodedData[e]);
+        maxErr = max<float>(maxErr, err);
+        avgErr += err;
+        errorTextureData[e] = err;
+    }
+    avgErr /= nElements;
+
+    // Save error texture
+    for (uint32_t e=0; e<nElements; e++)
+    {
+        uint32_t colIdx = 255.0f * (errorTextureData[e] / maxErr);
+        errorTexture.setPixel(e / width, e % height, colIdx);
+    }
+    errorTexture.save(QString(outPath.c_str()) + ".png");
+
+    // Save error histogram (QChart? QChart.grab().save("path");
+
+    // Save max error and avg error
+    ofstream csv;
+    csv.open(outPath + ".txt", ios::out);
+    csv << "Max error: " << maxErr << ", avg error: " << avgErr;
+    csv.close();
+}
+
 int main(int argc, char *argv[])
 {
+    string algorithms[6] = {"PACKED","TRIANGLE","MORTON","HILBERT","PHASE","SPLIT"};
+    uint32_t minQuality = 80, maxQuality = 100;
+
     string inputFile = "", outFolder = "", algo = "", outFormat = "JPG";
-    uint32_t quality = 100;
+    uint32_t quality = 101;
 
     if (ParseOptions(argc, argv, inputFile, outFolder, algo, quality, outFormat) < 0)
     {
         cout << "Error parsing command line arguments.\n";
         return -1;
     }
+
+    // Assign user-specified algorithm and quality
+    if (algo.compare(""))
+    {
+        algorithms[0] = algo;
+        for (uint32_t i=1; i<6; i++)
+            algorithms[i] = "";
+    }
+
+    if (quality <= 100)
+    {
+        minQuality = quality;
+        maxQuality = quality;
+    }
+
+    if (!outFolder.compare(""))
+        outFolder = "Output";
+    // Prepare output folder
+    if (!filesystem::exists(outFolder))
+        filesystem::create_directory(outFolder);
+    if (!filesystem::exists(outFolder + "/Uncompressed_Decoding"))
+        filesystem::create_directory(outFolder + "/Uncompressed_Decoding");
+
+    // Load image
+    Parser parser(inputFile, InputFormat::ASC);
+    DepthmapData mapData;
+    uint16_t* originalData = parser.Parse(mapData);
+
+    uint32_t nElements = mapData.Width * mapData.Height;
+    vector<uint8_t> encodedDataHolder(nElements * 3, 0);
+    vector<uint16_t> decodedDataHolder(nElements, 0);
+    auto colorMap = LoadColorMap("error_color_map.csv");
+
+    // Benchmark said image
+    for (uint32_t a=0; a<6; a++)
+    {
+        if (!algorithms[a].compare(""))
+            break;
+
+        // Encode and decode uncompressed data with current algorithm
+        if (!algorithms[a].compare("MORTON"))
+        {
+            MortonCoder c(16, 6);
+            c.Encode(originalData, encodedDataHolder.data(), nElements);
+            c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
+        }
+        else if (!algorithms[a].compare("HILBERT"))
+        {
+            HilbertCoder c(16, 6);
+            c.Encode(originalData, encodedDataHolder.data(), nElements);
+            c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
+        }
+        else if (!algorithms[a].compare("PACKED"))
+        {
+            /*
+            PackedCoder c(16);
+            c.Encode(originalData, encodedDataHolder.data(), nElements);
+            c.Decode(encodedDataHolder.data(), originalData, nElements);
+            */
+        }
+        else if (!algorithms[a].compare("SPLIT"))
+        {
+            SplitCoder c(16);
+            c.Encode(originalData, encodedDataHolder.data(), nElements);
+            c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
+        }
+        else if (!algorithms[a].compare("PHASE"))
+        {
+            PhaseCoder c(16);
+            c.Encode(originalData, encodedDataHolder.data(), nElements);
+            c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
+        }
+        else if (!algorithms[a].compare("TRIANGLE"))
+        {
+            TriangleCoder c(16);
+            c.Encode(originalData, encodedDataHolder.data(), nElements);
+            c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
+        }
+
+        SaveError(outFolder + "/Uncompressed_Decoding/error_" + algorithms[a], originalData, decodedDataHolder.data(), mapData.Width,
+                  mapData.Height, colorMap);
+
+        // Save error
+        for (uint32_t q=minQuality; q<=maxQuality; q++)
+        {
+
+        }
+    }
+
+    delete[] originalData;
+
 
     // Comprimi con algoritmo, usa quantizzazione specificata
     // Decomprimi, confronta con dati originali non quantizzati
@@ -213,6 +374,7 @@ int main(int argc, char *argv[])
     // Ogni volta che si "confronta", generare texture e istogramma degli errori
 
 
+    /*
     uint16_t* data = nullptr;
     DepthmapData dmData;
     Writer writer("encoded.jpg");
@@ -240,6 +402,7 @@ int main(int argc, char *argv[])
     RemoveNoise("decodedPerfect.png", dmData.Width, dmData.Height);
 
     delete[] data;
+    */
     return 0;
 }
 

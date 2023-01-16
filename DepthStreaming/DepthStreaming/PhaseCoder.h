@@ -1,5 +1,5 @@
-#ifndef PHASE_H
-#define PHASE_H
+#ifndef PHASECODER_H
+#define PHASECODER_H
 
 #include <Vec3.h>
 #include <Algorithm.h>
@@ -8,10 +8,10 @@
 
 namespace DStream
 {
-    class Phase : public Algorithm
+    class PhaseCoder : public Algorithm
     {
     public:
-        Phase(int q);
+        PhaseCoder(int q);
 
         void Encode(uint16_t* values, uint8_t* dest, uint32_t count);
         void Decode(uint8_t* values, uint16_t* dest, uint32_t count);
@@ -21,4 +21,4 @@ namespace DStream
     };
 }
 
-#endif // PHASE_H
+#endif // PHASECODER_H

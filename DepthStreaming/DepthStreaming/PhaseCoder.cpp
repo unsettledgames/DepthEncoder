@@ -1,12 +1,12 @@
-#include <Phase.h>
+#include <PhaseCoder.h>
 #include <cmath>
 // Credits for Morton convertions: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
 
 namespace DStream
 {
-    Phase::Phase(int q) : Algorithm(q){}
+    PhaseCoder::PhaseCoder(int q) : Algorithm(q){}
 
-    void Phase::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
+    void PhaseCoder::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
     {
         for (uint32_t i=0; i<count; i++)
         {
@@ -17,7 +17,7 @@ namespace DStream
         }
     }
 
-    void Phase::Decode(uint8_t* values, uint16_t* dest, uint32_t count)
+    void PhaseCoder::Decode(uint8_t* values, uint16_t* dest, uint32_t count)
     {
         for (uint32_t i=0; i<count; i++)
         {
@@ -26,7 +26,7 @@ namespace DStream
         }
     }
 
-    Color Phase::ValueToColor(uint16_t val)
+    Color PhaseCoder::ValueToColor(uint16_t val)
     {
         Color ret;
         const float P = 16384.0f;
@@ -39,7 +39,7 @@ namespace DStream
         return ret;
     }
 
-    uint16_t Phase::ColorToValue(const Color& col)
+    uint16_t PhaseCoder::ColorToValue(const Color& col)
     {
         const float w = 65535.0f;
         const float P = 16384.0f;

@@ -1,12 +1,12 @@
-#include <Split.h>
+#include <SplitCoder.h>
 #include <cmath>
 // Credits for Morton convertions: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
 
 namespace DStream
 {
-    Split::Split(int q) : Algorithm(q){}
+    SplitCoder::SplitCoder(int q) : Algorithm(q){}
 
-    void Split::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
+    void SplitCoder::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
     {
         for (uint32_t i=0; i<count; i++)
         {
@@ -17,7 +17,7 @@ namespace DStream
         }
     }
 
-    void Split::Decode(uint8_t* values, uint16_t* dest, uint32_t count)
+    void SplitCoder::Decode(uint8_t* values, uint16_t* dest, uint32_t count)
     {
         for (uint32_t i=0; i<count; i++)
         {
@@ -26,7 +26,7 @@ namespace DStream
         }
     }
 
-    Color Split::ValueToColor(uint16_t val)
+    Color SplitCoder::ValueToColor(uint16_t val)
     {
         Color ret;
 
@@ -50,7 +50,7 @@ namespace DStream
         return ret;
     }
 
-    uint16_t Split::ColorToValue(const Color& col)
+    uint16_t SplitCoder::ColorToValue(const Color& col)
     {
         float Ld = col.x;
         float Ha = col.y;

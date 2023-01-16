@@ -1,12 +1,12 @@
-#include <Triangle.h>
+#include <TriangleCoder.h>
 #include <cmath>
 // Credits for Morton convertions: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
 
 namespace DStream
 {
-    Triangle::Triangle(int q) : Algorithm(q){}
+    TriangleCoder::TriangleCoder(int q) : Algorithm(q){}
 
-    void Triangle::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
+    void TriangleCoder::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
     {
         for (uint32_t i=0; i<count; i++)
         {
@@ -17,7 +17,7 @@ namespace DStream
         }
     }
 
-    void Triangle::Decode(uint8_t* values, uint16_t* dest, uint32_t count)
+    void TriangleCoder::Decode(uint8_t* values, uint16_t* dest, uint32_t count)
     {
         for (uint32_t i=0; i<count; i++)
         {
@@ -26,7 +26,7 @@ namespace DStream
         }
     }
 
-    Color Triangle::ValueToColor(uint16_t val)
+    Color TriangleCoder::ValueToColor(uint16_t val)
     {
         const float w = 65536.0f;
         const float p = 512.0f / w;
@@ -53,7 +53,7 @@ namespace DStream
         return ret;
     }
 
-    uint16_t Triangle::ColorToValue(const Color& col)
+    uint16_t TriangleCoder::ColorToValue(const Color& col)
     {
         const int w = 65536;
         // Function data
