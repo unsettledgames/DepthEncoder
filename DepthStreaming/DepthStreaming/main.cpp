@@ -227,6 +227,7 @@ void SaveError(const std::string& outPath, uint16_t* originalData, uint16_t* dec
 {
     uint32_t nElements = width * height;
     vector<uint16_t> errorTextureData(nElements);
+    unordered_map<uint16_t, int> errorFrequencies;
     QImage errorTexture(width, height, QImage::Format_Indexed8);
     errorTexture.setColorTable(colorMap);
     maxErr = -1e20;
@@ -240,18 +241,31 @@ void SaveError(const std::string& outPath, uint16_t* originalData, uint16_t* dec
         maxErr = max<float>(maxErr, err);
         avgErr += err;
         errorTextureData[e] = err;
+        if (errorFrequencies.find(errorTextureData[e]) == errorFrequencies.end())
+            errorFrequencies[errorTextureData[e]] = 1;
+        else
+            errorFrequencies[errorTextureData[e]]++;
     }
     avgErr /= nElements;
 
     // Save error texture
     for (uint32_t e=0; e<nElements; e++)
     {
-        uint32_t colIdx = 255.0f * (errorTextureData[e] / maxErr);
-        errorTexture.setPixel(e / width, e % height, colIdx);
+        //uint32_t colIdx = 255.0f * (errorTextureData[e] / 65535.0f);
+        float logErr = std::log(1.0 + (float)errorTextureData[e]);
+        logErr /= std::log(1.0 + maxErr);
+        logErr *= 255.0;
+        errorTexture.setPixel(e % height, e / width, logErr);
     }
-    errorTexture.save(QString(outPath.c_str()) + ".png");
+    errorTexture.save(QString(outPath.c_str()));
 
-    // Save error histogram (QChart? QChart.grab().save("path");
+    // Save error histogram
+    ofstream histogram;
+    histogram.open(outPath + "histogram.csv");
+    histogram << "Errors, Frequencies" << endl;
+    for (uint32_t i=0; i<maxErr; i++)
+        if (errorFrequencies[i] != 0)
+            histogram << i << "," << errorFrequencies[i] << endl;
 
     // Save max error and avg error
     ofstream csv;
@@ -309,21 +323,26 @@ int main(int argc, char *argv[])
     compressedCsv.open(outFolder + "/Compressed.csv", ios::out);
 
     for (uint32_t i=0; i<6; i++)
+    {
         if (algorithms[i].compare(""))
-            uncompressedCsv << algorithms[i] << ",";
+        {
+            uncompressedCsv << algorithms[i] << "Max,";
+            uncompressedCsv << algorithms[i] << "Avg,";
+        }
+    }
     uncompressedCsv << endl;
 
     for (uint32_t i=0; i<6; i++)
     {
-        if (algorithms[i].compare(""))
+        if (!algorithms[i].compare(""))
             break;
-        for (uint32_t q=minQuality; q<=maxQuality; q++)
+        for (uint32_t q=minQuality; q<=maxQuality; q+=5)
         {
-            compressedCsv << algorithms[i] << q << "Max";
-            compressedCsv << algorithms[i] << q << "Avg";
+            compressedCsv << algorithms[i] << q << "Max,";
+            compressedCsv << algorithms[i] << q << "Avg,";
         }
     }
-    uncompressedCsv << endl;
+    compressedCsv << endl;
 
     // Load image
     Parser parser(inputFile, InputFormat::ASC);
@@ -335,49 +354,49 @@ int main(int argc, char *argv[])
     vector<uint16_t> decodedDataHolder(nElements, 0);
     auto colorMap = LoadColorMap("error_color_map.csv");
 
+    uint32_t quantization = 12;
+
     // Benchmark said image
     for (uint32_t a=0; a<6; a++)
     {
         float maxErr, avgErr;
         if (!algorithms[a].compare(""))
             break;
-        if (!algorithms[a].compare("PACKED"))
-            continue;
 
         // Encode and decode uncompressed data with current algorithm
         if (!algorithms[a].compare("MORTON"))
         {
-            MortonCoder c(16, 6);
+            MortonCoder c(quantization, 6);
             c.Encode(originalData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
         else if (!algorithms[a].compare("HILBERT"))
         {
-            HilbertCoder c(16, 6);
+            HilbertCoder c(quantization, 6);
             c.Encode(originalData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
         else if (!algorithms[a].compare("PACKED"))
         {
-            PackedCoder c(16);
+            PackedCoder c(quantization);
             c.Encode(originalData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
         else if (!algorithms[a].compare("SPLIT"))
         {
-            SplitCoder c(16);
+            SplitCoder c(quantization);
             c.Encode(originalData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
         else if (!algorithms[a].compare("PHASE"))
         {
-            PhaseCoder c(16);
+            PhaseCoder c(quantization);
             c.Encode(originalData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
         else if (!algorithms[a].compare("TRIANGLE"))
         {
-            TriangleCoder c(16);
+            TriangleCoder c(quantization);
             c.Encode(originalData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
@@ -385,6 +404,9 @@ int main(int argc, char *argv[])
 
         SaveError(outFolder + "/Uncompressed_Decoding/error_" + algorithms[a], originalData, decodedDataHolder.data(), mapData.Width,
                   mapData.Height, colorMap, maxErr, avgErr);
+        Writer outWriter(outFolder + "/Uncompressed_Decoding/decoded_" + algorithms[a] + ".png");
+        outWriter.Write(decodedDataHolder.data(), mapData.Width, mapData.Height);
+        uncompressedCsv << maxErr << "," << avgErr << ",";
 
         for (uint32_t q=minQuality; q<=maxQuality; q+=5)
         {
@@ -405,32 +427,32 @@ int main(int argc, char *argv[])
             // Decode compressed data
             if (!algorithms[a].compare("MORTON"))
             {
-                MortonCoder c(16, 6);
+                MortonCoder c(quantization, 6);
                 c.Decode(bits, decodedDataHolder.data(), nElements);
             }
             else if (!algorithms[a].compare("HILBERT"))
             {
-                HilbertCoder c(16, 6);
+                HilbertCoder c(quantization, 6);
                 c.Decode(bits, decodedDataHolder.data(), nElements);
             }
             else if (!algorithms[a].compare("PACKED"))
             {
-                PackedCoder c(16);
+                PackedCoder c(quantization);
                 c.Decode(bits, decodedDataHolder.data(), nElements);
             }
             else if (!algorithms[a].compare("SPLIT"))
             {
-                SplitCoder c(16);
+                SplitCoder c(quantization);
                 c.Decode(bits, decodedDataHolder.data(), nElements);
             }
             else if (!algorithms[a].compare("PHASE"))
             {
-                PhaseCoder c(16);
+                PhaseCoder c(quantization);
                 c.Decode(bits, decodedDataHolder.data(), nElements);
             }
             else if (!algorithms[a].compare("TRIANGLE"))
             {
-                TriangleCoder c(16);
+                TriangleCoder c(quantization);
                 c.Decode(bits, decodedDataHolder.data(), nElements);
             }
 
@@ -441,6 +463,7 @@ int main(int argc, char *argv[])
             // Save decoded error
             SaveError(ss.str() + algorithms[a] + "_error.png", originalData, decodedDataHolder.data(), mapData.Width, mapData.Height,
                       colorMap, maxErr, avgErr);
+            compressedCsv << maxErr << "," << avgErr << ",";
         }
     }
 
