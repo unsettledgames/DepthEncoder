@@ -123,35 +123,31 @@ int ParseOptions(int argc, char** argv, string& inputFile, string& outFolder, st
 }
 
 
-void RemoveNoise(const std::string& fileName, uint32_t width, uint32_t height)
+void RemoveNoiseNaive(std::vector<uint16_t>& data, uint32_t width, uint32_t height)
 {
-    QImage input(QString(fileName.c_str()));
-    QImage output(width, height, QImage::Format_RGB888);
-    input = input.convertToFormat(QImage::Format_RGB888);
-
     for (uint32_t y=0; y<height; y++)
     {
         for (uint32_t x=0; x<width; x++)
         {
             if (y != 0 && x != 0 && x != (width-1) && y != (height-1))
             {
-                int current = qRed(input.pixel(x, y));
+                int current = data[x + y * width];
                 // Get all neighbors
                 std::vector<int> neighbors;
-                neighbors.push_back(qRed(input.pixel(x, y + 1)));
-                neighbors.push_back(qRed(input.pixel(x, y-1)));
-                neighbors.push_back(qRed(input.pixel(x-1, y)));
-                neighbors.push_back(qRed(input.pixel(x+1, y)));
+                neighbors.push_back(data[x+1 + y * width]);
+                neighbors.push_back(data[x-1 + y * width]);
+                neighbors.push_back(data[x + (y+1) * width]);
+                neighbors.push_back(data[x + (y-1) * width]);
 
                 // Compute distance matrix
                 int distanceMatrix[4][4];
-                int outlierThreshold = 32;
+                int outlierThreshold = 1000;
 
                 for (int i=0; i<4; i++)
                     for (int j=0; j<4; j++)
                         distanceMatrix[i][j] = std::abs(neighbors[i] - neighbors[j]);
 
-                int outliers = 0;
+                uint32_t outliers = 0;
                 // Check if there's an outlier
                 for (uint32_t i=0; i<4; i++)
                     if (distanceMatrix[i][0] > outlierThreshold)
@@ -159,8 +155,10 @@ void RemoveNoise(const std::string& fileName, uint32_t width, uint32_t height)
 
                 // Find the right outliers (for each neighbor, return the one with the biggest row + column sum)
                 std::vector<int> outliersIdx;
+
                 for (uint32_t i=0; i<outliers; i++)
                 {
+                    int currOutlier = -1;
                     int maxSum = -1;
                     for (uint32_t j=0; j<4; j++)
                     {
@@ -174,10 +172,12 @@ void RemoveNoise(const std::string& fileName, uint32_t width, uint32_t height)
 
                         if ((row + col) > maxSum && !std::count(outliersIdx.begin(), outliersIdx.end(), j))
                         {
-                            outliersIdx.push_back(j);
+                            currOutlier = j;
                             maxSum = row + col;
                         }
                     }
+                    if (currOutlier != -1)
+                        outliersIdx.push_back(currOutlier);
                 }
 
                 // Compute the average withouit maxIdx
@@ -190,14 +190,114 @@ void RemoveNoise(const std::string& fileName, uint32_t width, uint32_t height)
                 float err = std::abs(current - avg);
 
                 if (err > 8)
-                    output.setPixel(x, y, qRgb(avg, avg, avg));
+                    data[x + y*width] = avg;
                 else
-                    output.setPixel(x, y, qRgb(current, current, current));
+                    data[x + y*width] = current;
             }
         }
     }
+}
 
-    output.save(QString((fileName + "polished.png").c_str()));
+
+void RemoveNoiseMedian(std::vector<uint16_t>& data, uint32_t width, uint32_t height)
+{
+    int halfWind = 1;
+    for (int y=0; y<height; y++)
+    {
+        for (int x=0; x<width; x++)
+        {
+            // Compute distance sqrt(matrix size)
+            int matSize = (halfWind * 2 + 1) * (halfWind * 2 + 1);
+            bool removed = false;
+            if (y - halfWind < 0 || y+halfWind >= height)
+            {
+                matSize -= halfWind * 2 + 1;
+                removed = true;
+            }
+            if (x - halfWind < 0 || x+halfWind >= width)
+            {
+                if (!removed)
+                    matSize -= halfWind * 2 + 1;
+                else
+                    matSize -= halfWind * 2;
+            }
+
+            // Get all neighbors
+            std::vector<int> neighbors;
+
+            int current = data[x + y * width];
+            for (int i=-halfWind; i<=halfWind; i++)
+            {
+                for (int j=-halfWind; j<=halfWind; j++)
+                {
+                    int xCoord = x + j;
+                    int yCoord = (y+i);
+                    if (xCoord >= 0 && xCoord < width && yCoord >= 0 && yCoord < height)
+                        neighbors.push_back(data[xCoord + yCoord*width]);
+                }
+            }
+
+            // Compute distance matrix
+            int distanceMatrix[matSize][matSize];
+            int outlierThreshold = 750;
+
+            for (int i=0; i<matSize; i++)
+                for (int j=0; j<matSize; j++)
+                    distanceMatrix[i][j] = std::abs(neighbors[i] - neighbors[j]);
+
+            uint32_t outliers = 0;
+            // Check if there's an outlier
+            for (uint32_t i=0; i<matSize; i++)
+                if (distanceMatrix[i][0] > outlierThreshold)
+                    outliers++;
+
+            // Find the right outliers (for each neighbor, return the one with the biggest row + column sum)
+            std::vector<int> outliersIdx;
+
+            for (uint32_t i=0; i<outliers; i++)
+            {
+                int currOutlier = -1;
+                int maxSum = -1;
+                for (int j=0; j<matSize; j++)
+                {
+                    // Compute row + column
+                    int row = 0, col = 0;
+                    for (int k=0; k<matSize; k++)
+                    {
+                        row += distanceMatrix[j][k];
+                        col += distanceMatrix[k][j];
+                    }
+
+                    if ((row + col) > maxSum && !std::count(outliersIdx.begin(), outliersIdx.end(), j))
+                    {
+                        currOutlier = j;
+                        maxSum = row + col;
+                    }
+                }
+                if (currOutlier != -1)
+                    outliersIdx.push_back(currOutlier);
+            }
+
+            std::vector<uint16_t> goodNeighbors;
+            for (int i=0; i<neighbors.size(); i++)
+                if (!std::count(outliersIdx.begin(), outliersIdx.end(), i))
+                    goodNeighbors.push_back(neighbors[i]);
+
+            // Compute the average without maxIdx
+            float avg = 0;
+            for (uint32_t i=0; i<goodNeighbors.size(); i++)
+                avg += goodNeighbors[i];
+            avg /= goodNeighbors.size();
+
+            float err = std::abs(current - avg);
+            std::sort(goodNeighbors.begin(), goodNeighbors.end());
+
+            if (err > 500)
+                data[x + y*width] = goodNeighbors[goodNeighbors.size() / 2];
+            else
+                data[x + y*width] = current;
+        }
+    }
 }
 
 QVector<QRgb> LoadColorMap(string path)
@@ -252,9 +352,9 @@ void SaveError(const std::string& outPath, uint16_t* originalData, uint16_t* dec
     for (uint32_t e=0; e<nElements; e++)
     {
         //uint32_t colIdx = 255.0f * (errorTextureData[e] / 65535.0f);
-        float logErr = std::log(1.0 + (float)errorTextureData[e]);
-        logErr /= std::log(1.0 + maxErr);
-        logErr *= 255.0;
+        float logErr = std::log2(1.0 + (float)errorTextureData[e]) * 16.0f;
+        //logErr /= std::log(1.0 + maxErr);
+        //logErr *= 255.0;
         errorTexture.setPixel(e % height, e / width, logErr);
     }
     errorTexture.save(QString(outPath.c_str()));
@@ -276,7 +376,7 @@ void SaveError(const std::string& outPath, uint16_t* originalData, uint16_t* dec
 
 int main(int argc, char *argv[])
 {
-    string algorithms[6] = {"PACKED","TRIANGLE","MORTON","HILBERT","PHASE","SPLIT"};
+    string algorithms[6] = {"HILBERT","TRIANGLE","MORTON","PACKED","PHASE","SPLIT"};
     uint32_t minQuality = 80, maxQuality = 100;
 
     string inputFile = "", outFolder = "", algo = "", outFormat = "JPG";
@@ -354,7 +454,8 @@ int main(int argc, char *argv[])
     vector<uint16_t> decodedDataHolder(nElements, 0);
     auto colorMap = LoadColorMap("error_color_map.csv");
 
-    uint32_t quantization = 12;
+    uint32_t quantization = 16;
+    uint32_t hilbertBits = 5;
 
     // Benchmark said image
     for (uint32_t a=0; a<6; a++)
@@ -372,7 +473,7 @@ int main(int argc, char *argv[])
         }
         else if (!algorithms[a].compare("HILBERT"))
         {
-            HilbertCoder c(quantization, 6);
+            HilbertCoder c(quantization, hilbertBits);
             c.Encode(originalData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
@@ -432,8 +533,11 @@ int main(int argc, char *argv[])
             }
             else if (!algorithms[a].compare("HILBERT"))
             {
-                HilbertCoder c(quantization, 6);
+                HilbertCoder c(quantization, hilbertBits);
                 c.Decode(bits, decodedDataHolder.data(), nElements);
+                // Clean data
+                //RemoveNoiseNaive(decodedDataHolder, mapData.Width, mapData.Height);
+                RemoveNoiseMedian(decodedDataHolder, mapData.Width, mapData.Height);
             }
             else if (!algorithms[a].compare("PACKED"))
             {

@@ -20,14 +20,15 @@ namespace DStream
 
     private:
         // Hilbert transpose
-        void TransposeFromHilbertCoords(Color& col, int dim);
-        void TransposeToHilbertCoords(Color& col, int dim);
+        void TransposeFromHilbertCoords(Color& col);
+        void TransposeToHilbertCoords(Color& col);
 
         Color Enlarge(Color col);
         Color Shrink(Color col);
 
     private:
         uint32_t m_CurveBits;
+        uint32_t m_SegmentBits;
         bool m_OptimizeSpacing;
     };
 }

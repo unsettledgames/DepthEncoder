@@ -28,8 +28,10 @@ namespace DStream
     {
         Color ret;
 
-        ret.x = val / 256;
-        ret.y = val % 256;
+        val <<= (16 - m_Quantization);
+
+        ret.x = val & 255;
+        ret.y = val >> 8;
 
         return ret;
     }
