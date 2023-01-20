@@ -8,7 +8,7 @@ namespace DStream
     {
         for (uint32_t i=0; i<count; i++)
         {
-            Color encoded = ValueToColor(Quantize(values[i]));
+            Color encoded = ValueToColor(values[i]);
             // Add color to result
             for (uint32_t j=0; j<3; j++)
                 dest[i*3+j] = encoded[j];
@@ -28,10 +28,8 @@ namespace DStream
     {
         Color ret;
 
-        val <<= (16 - m_Quantization);
-
-        ret.x = val & 255;
-        ret.y = val >> 8;
+        ret.x = val >> 8;
+        ret.y = val & 255;
 
         return ret;
     }

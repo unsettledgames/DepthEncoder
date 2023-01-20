@@ -2,18 +2,27 @@
 #include <MortonCoder.h>
 
 #include <vector>
+#include <assert.h>
 #include <iostream>
 
 namespace DStream
 {
-    HilbertCoder::HilbertCoder(uint32_t q, uint32_t curveBits, bool optimizeSpacing/* = false*/) : Algorithm(q),
-        m_CurveBits(curveBits), m_SegmentBits(curveBits >= 6 ? 0 : 16 - 3*curveBits), m_OptimizeSpacing(optimizeSpacing){}
+    HilbertCoder::HilbertCoder(uint32_t q, uint32_t curveBits, bool optimizeSpacing/* = false*/) : Algorithm(q)
+    {
+        assert(curveBits * 3 < q);
+
+        m_CurveBits = curveBits;
+        m_SegmentBits = q - 3 * m_CurveBits;
+
+        assert(m_CurveBits + m_SegmentBits <= 8);
+        m_OptimizeSpacing = optimizeSpacing;
+    }
 
     void HilbertCoder::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
     {
         for (uint32_t i=0; i<count; i++)
         {
-            Color encoded = ValueToColor(Quantize(values[i]));
+            Color encoded = ValueToColor(values[i]);
             // Add color to result
             for (uint32_t j=0; j<3; j++)
                 dest[i*3+j] = encoded[j];
@@ -143,6 +152,7 @@ namespace DStream
 
     Color HilbertCoder::ValueToColor(uint16_t val)
     {
+        val >>= 16 - m_Quantization;
         int frac = val & ((1 << m_SegmentBits) - 1);
         val >>= m_SegmentBits;
 
@@ -158,31 +168,55 @@ namespace DStream
 
         // Divide in segments
         for (uint32_t i=0; i<3; i++)
-            v[i] = ((v[i] << m_SegmentBits) + (v2[i] - v[i]) * frac);
+        {
+            uint8_t mult = (v2[i] - v[i]) * frac;
+            mult <<= (8-m_SegmentBits);
+            mult >>= (8-m_SegmentBits);
+            v[i] = (v[i] << m_SegmentBits) + mult;
+        }
 
-        return Enlarge(v); // TODO: Enlarge here
+        if (m_CurveBits == 5) return Enlarge(v);
+        else return v;
     }
 
     uint16_t HilbertCoder::ColorToValue(const Color& col)
     {
         MortonCoder m(m_Quantization, m_CurveBits);
-        Color col1 = Shrink(col);
-        int fract = 0;
+        Color col1 = m_CurveBits == 5 ? Shrink(col) : col;
+        Color currColor;
+
+        uint8_t fract = 0;
         for (uint32_t i=0; i<3; i++)
-            fract |= col1[i] & ~(~0 << m_SegmentBits);
+            fract |= col1[i] & ((1 << m_SegmentBits)-1);
 
         for (uint32_t i=0; i<3; i++)
             col1[i] >>= m_SegmentBits;
 
+        currColor = col1;
         TransposeToHilbertCoords(col1);
         std::swap(col1[0], col1[2]);
         uint16_t v1 = m.ColorToValue(col1);
 
+        uint16_t v2 = v1 + 1;
+        Color nextCol = m.ValueToColor(v2);
+        std::swap(nextCol[0], nextCol[2]);
+        TransposeFromHilbertCoords(nextCol);
+
+        int fracSign = 0;
+        for (int i=0; i<3; i++)
+            fracSign += nextCol[i] - currColor[i];
+        // 2 complement if negative
+        if (fracSign < 0)
+        {
+            fract = ((~fract + 1) << (8-m_SegmentBits));
+            fract >>= (8-m_SegmentBits);
+        }
+
         // Add back fractional part
-        v1 <<= m_SegmentBits;
+        v1 <<=  m_SegmentBits;
         v1 += fract;
 
+        v1 <<= 16 - m_Quantization;
         return v1;
     }
 }
-

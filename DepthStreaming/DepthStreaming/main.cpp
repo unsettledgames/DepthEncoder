@@ -283,6 +283,7 @@ void RemoveNoiseMedian(std::vector<uint16_t>& data, uint32_t width, uint32_t hei
                 if (!std::count(outliersIdx.begin(), outliersIdx.end(), i))
                     goodNeighbors.push_back(neighbors[i]);
 
+
             // Compute the average without maxIdx
             float avg = 0;
             for (uint32_t i=0; i<goodNeighbors.size(); i++)
@@ -292,7 +293,7 @@ void RemoveNoiseMedian(std::vector<uint16_t>& data, uint32_t width, uint32_t hei
             float err = std::abs(current - avg);
             std::sort(goodNeighbors.begin(), goodNeighbors.end());
 
-            if (err > 500)
+            if (err > 750)
                 data[x + y*width] = goodNeighbors[goodNeighbors.size() / 2];
             else
                 data[x + y*width] = current;
@@ -374,14 +375,38 @@ void SaveError(const std::string& outPath, uint16_t* originalData, uint16_t* dec
     csv.close();
 }
 
+uint16_t* Quantize(uint16_t* input, uint32_t nElements, uint32_t quantization)
+{
+    uint16_t* ret = new uint16_t[nElements];
+    for (uint32_t i=0; i<nElements; i++)
+        ret[i] = (input[i] >> (16 - quantization)) << (16 - quantization);
+    return ret;
+}
+
 int main(int argc, char *argv[])
 {
-    string algorithms[6] = {"HILBERT","TRIANGLE","MORTON","PACKED","PHASE","SPLIT"};
+    string algorithms[6] = {"HILBERT","PACKED","MORTON","TRIANGLE","PHASE","SPLIT"};
     uint32_t minQuality = 80, maxQuality = 100;
 
     string inputFile = "", outFolder = "", algo = "", outFormat = "JPG";
     uint32_t quality = 101;
+    uint32_t quantization = 16;
+    uint32_t hilbertBits = 3;
 
+    /*
+    for (uint16_t i=0; i<16383; i++)
+    {
+        if (i == 16353)
+            cout << "EH" << endl;
+        uint16_t val = i << 2;
+        HilbertCoder hc(14, 3);
+        Color c = hc.ValueToColor(val);
+        uint16_t d = hc.ColorToValue(c);
+
+        if (d != val)
+            cout << "Err on value " << i << ": " << abs(d - val) << endl;
+    }
+*/
     if (ParseOptions(argc, argv, inputFile, outFolder, algo, quality, outFormat) < 0)
     {
         cout << "Error parsing command line arguments.\n";
@@ -453,9 +478,7 @@ int main(int argc, char *argv[])
     vector<uint8_t> encodedDataHolder(nElements * 3, 0);
     vector<uint16_t> decodedDataHolder(nElements, 0);
     auto colorMap = LoadColorMap("error_color_map.csv");
-
-    uint32_t quantization = 16;
-    uint32_t hilbertBits = 5;
+    uint16_t* quantizedData = Quantize(originalData, mapData.Width * mapData.Height, quantization);
 
     // Benchmark said image
     for (uint32_t a=0; a<6; a++)
@@ -468,37 +491,37 @@ int main(int argc, char *argv[])
         if (!algorithms[a].compare("MORTON"))
         {
             MortonCoder c(quantization, 6);
-            c.Encode(originalData, encodedDataHolder.data(), nElements);
+            c.Encode(quantizedData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
         else if (!algorithms[a].compare("HILBERT"))
         {
-            HilbertCoder c(quantization, hilbertBits);
-            c.Encode(originalData, encodedDataHolder.data(), nElements);
+            HilbertCoder c(14, 3);
+            c.Encode(quantizedData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
         else if (!algorithms[a].compare("PACKED"))
         {
             PackedCoder c(quantization);
-            c.Encode(originalData, encodedDataHolder.data(), nElements);
+            c.Encode(quantizedData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
         else if (!algorithms[a].compare("SPLIT"))
         {
             SplitCoder c(quantization);
-            c.Encode(originalData, encodedDataHolder.data(), nElements);
+            c.Encode(quantizedData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
         else if (!algorithms[a].compare("PHASE"))
         {
             PhaseCoder c(quantization);
-            c.Encode(originalData, encodedDataHolder.data(), nElements);
+            c.Encode(quantizedData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
         else if (!algorithms[a].compare("TRIANGLE"))
         {
             TriangleCoder c(quantization);
-            c.Encode(originalData, encodedDataHolder.data(), nElements);
+            c.Encode(quantizedData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
 
@@ -533,11 +556,11 @@ int main(int argc, char *argv[])
             }
             else if (!algorithms[a].compare("HILBERT"))
             {
-                HilbertCoder c(quantization, hilbertBits);
+                HilbertCoder c(14, 3);
                 c.Decode(bits, decodedDataHolder.data(), nElements);
                 // Clean data
                 //RemoveNoiseNaive(decodedDataHolder, mapData.Width, mapData.Height);
-                RemoveNoiseMedian(decodedDataHolder, mapData.Width, mapData.Height);
+                //RemoveNoiseMedian(decodedDataHolder, mapData.Width, mapData.Height);
             }
             else if (!algorithms[a].compare("PACKED"))
             {
@@ -572,14 +595,7 @@ int main(int argc, char *argv[])
     }
 
     delete[] originalData;
-
-
-    //      Comprimi con algoritmo, usa quantizzazione specificata
-    //      Decomprimi, confronta con dati originali non quantizzati
-    // OK   Salva codifica in JPEG
-    // OK   Leggi JPEG, decomprimi, confronta con dati quantizzati
-    // OK   Salva decodifica in PNG
-    //      Rimuovi outlier, confronta con dati quantizzati
+    delete[] quantizedData;
 
     return 0;
 }
