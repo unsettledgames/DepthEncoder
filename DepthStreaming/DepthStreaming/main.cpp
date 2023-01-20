@@ -13,6 +13,7 @@
 #include <fstream>
 #include <vector>
 #include <filesystem>
+#include <cmath>
 
 #ifndef _WIN32
 #include <unistd.h>

@@ -8,18 +8,16 @@ namespace DStream
     template<typename T>
     struct _vec3
     {
-        T x;
-        T y;
-        T z;
+    union {
+        T v[3];
+        struct {
+            T x, y, z;
+        };
+    };
 
         inline T& operator [](int idx)
         {
-            switch (idx)
-            {
-            case 0: return x;
-            case 1: return y;
-            case 2: return z;
-            }
+            return v[idx];
         }
     };
 

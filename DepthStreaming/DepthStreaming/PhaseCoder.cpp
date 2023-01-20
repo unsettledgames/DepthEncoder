@@ -1,5 +1,6 @@
 #include <PhaseCoder.h>
 #include <cmath>
+#include <algorithm>
 // Credits for Morton convertions: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
 
 namespace DStream
@@ -57,9 +58,7 @@ namespace DStream
         PHI = phi + 2 * M_PI * K;
 
         Z = PHI * (P / (M_PI * 2.0f));
-        Z = std::min(std::max(0.0f, Z), 65535.0f);
-
-        return Z;
+		return std::min(std::max(0, static_cast<int>(Z)), 65535);
     }
 }
 

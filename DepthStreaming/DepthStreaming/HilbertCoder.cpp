@@ -111,7 +111,7 @@ namespace DStream
                 gap *= 2;
             }
 
-            for(int i = 0; i < occupancy.size(); i++) {
+			for(size_t i = 0; i < occupancy.size(); i++) {
                 if(occupancy[i])
                     remap.push_back(i);
             }
@@ -185,9 +185,15 @@ namespace DStream
         Color col1 = m_CurveBits == 5 ? Shrink(col) : col;
         Color currColor;
 
-        uint8_t fract = 0;
-        for (uint32_t i=0; i<3; i++)
-            fract |= col1[i] & ((1 << m_SegmentBits)-1);
+		uint8_t fract = 0;
+		int pos = 0;
+		for (uint32_t i=0; i<3; i++) {
+			uint8_t f = col1[i] & ((1 << m_SegmentBits)-1);
+			if(f != 0) {
+				fract = f;
+				pos = i;
+			}
+		}
 
         for (uint32_t i=0; i<3; i++)
             col1[i] >>= m_SegmentBits;
@@ -202,15 +208,8 @@ namespace DStream
         std::swap(nextCol[0], nextCol[2]);
         TransposeFromHilbertCoords(nextCol);
 
-        int fracSign = 0;
-        for (int i=0; i<3; i++)
-            fracSign += nextCol[i] - currColor[i];
-        // 2 complement if negative
-        if (fracSign < 0)
-        {
-            fract = ((~fract + 1) << (8-m_SegmentBits));
-            fract >>= (8-m_SegmentBits);
-        }
+		if(nextCol[pos] == currColor[pos])
+			fract = (1<<m_SegmentBits) - fract;
 
         // Add back fractional part
         v1 <<=  m_SegmentBits;

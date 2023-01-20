@@ -1,4 +1,5 @@
 CONFIG += c++17 console
+QMAKE_CXXFLAGS += -std=c++2a
 CONFIG -= app_bundle
 
 # You can make your code fail to compile if it uses deprecated APIs.
@@ -9,6 +10,8 @@ win32:LIBS += \
     $$PWD/../Deps/libjpeg-turbo-2.0.6/bin/jpeg62.dll
 win32:INCLUDEPATH += \
     $$PWD/../Deps/libjpeg-turbo-2.0.6/include
+
+linux:LIBS += -ljpeg
 
 SOURCES += \
         HilbertCoder.cpp \
