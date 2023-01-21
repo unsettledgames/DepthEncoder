@@ -21,6 +21,16 @@ namespace DStream
             case 2: return z;
             }
         }
+
+        inline bool operator==(const _vec3& other)
+        {
+            return other.x == x && other.y == y && other.z == z;
+        }
+
+        inline bool operator!=(const _vec3& other)
+        {
+            return other.x != x || other.y != y || other.z != z;
+        }
     };
 
     typedef _vec3<uint8_t>   Color;

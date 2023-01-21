@@ -18,11 +18,11 @@ namespace DStream
         Color ValueToColor(uint16_t val);
         uint16_t ColorToValue(const Color& col);
 
-    private:
         // Hilbert transpose
         void TransposeFromHilbertCoords(Color& col);
         void TransposeToHilbertCoords(Color& col);
 
+    private:
         Color Enlarge(Color col);
         Color Shrink(Color col);
 

@@ -394,11 +394,41 @@ int main(int argc, char *argv[])
     uint32_t hilbertBits = 3;
 
     /*
-    for (uint16_t i=0; i<16383; i++)
+    for (uint16_t i=0; i<512; i++)
     {
-        if (i == 16353)
-            cout << "EH" << endl;
-        uint16_t val = i << 2;
+        MortonCoder mc(16, 3);
+        Color c = mc.ValueToColor(i);
+        uint16_t d = mc.ColorToValue(c);
+
+        if (d != i)
+            std::cout << "Err on " << i << ": " << abs(d - i) << endl;
+    }*/
+
+    uint16_t max = 8;
+    HilbertCoder hc(14, 3);
+
+    /*
+    for (uint16_t i=0; i<max; i++)
+    {
+        for (uint16_t j=0; j<max; j++)
+        {
+            for (uint16_t k=0; k<max; k++)
+            {
+                Color col = {(uint8_t)i, (uint8_t)j, (uint8_t)k};
+                Color col2 = col;
+                hc.TransposeToHilbertCoords(col2);
+                hc.TransposeFromHilbertCoords(col2);
+
+                if (col != col2)
+                    std::cout << "Err " << (int)col.x << "," << (int)col.y << "," << (int)col.z << endl;
+            }
+        }
+    }*/
+
+
+    for (uint16_t i=260; i<16383; i++)
+    {
+        uint16_t val = i;
         HilbertCoder hc(14, 3);
         Color c = hc.ValueToColor(val);
         uint16_t d = hc.ColorToValue(c);
@@ -406,7 +436,7 @@ int main(int argc, char *argv[])
         if (d != val)
             cout << "Err on value " << i << ": " << abs(d - val) << endl;
     }
-*/
+
     if (ParseOptions(argc, argv, inputFile, outFolder, algo, quality, outFormat) < 0)
     {
         cout << "Error parsing command line arguments.\n";

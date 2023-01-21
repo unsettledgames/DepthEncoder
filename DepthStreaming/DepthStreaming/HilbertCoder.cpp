@@ -169,9 +169,7 @@ namespace DStream
         // Divide in segments
         for (uint32_t i=0; i<3; i++)
         {
-            uint8_t mult = (v2[i] - v[i]) * frac;
-            mult <<= (8-m_SegmentBits);
-            mult >>= (8-m_SegmentBits);
+            int mult = ((int)v2[i] - v[i]) * frac;
             v[i] = (v[i] << m_SegmentBits) + mult;
         }
 
@@ -182,7 +180,9 @@ namespace DStream
     uint16_t HilbertCoder::ColorToValue(const Color& col)
     {
         MortonCoder m(m_Quantization, m_CurveBits);
-        Color col1 = m_CurveBits == 5 ? Shrink(col) : col;
+        Color col1 = col;//m_CurveBits == 5 ? Shrink(col) : col;
+        Color col2 = col1;
+
         Color currColor;
 
         uint8_t fract = 0;
@@ -193,27 +193,25 @@ namespace DStream
             col1[i] >>= m_SegmentBits;
 
         currColor = col1;
+
         TransposeToHilbertCoords(col1);
         std::swap(col1[0], col1[2]);
         uint16_t v1 = m.ColorToValue(col1);
 
-        uint16_t v2 = v1 + 1;
-        Color nextCol = m.ValueToColor(v2);
-        std::swap(nextCol[0], nextCol[2]);
-        TransposeFromHilbertCoords(nextCol);
+        uint16_t v2 = v1 - 1;
+        col2 = m.ValueToColor(v2);
+        std::swap(col2[0], col2[2]);
+        TransposeFromHilbertCoords(col2);
 
-        int fracSign = 0;
-        for (int i=0; i<3; i++)
-            fracSign += nextCol[i] - currColor[i];
-        // 2 complement if negative
-        if (fracSign < 0)
-        {
-            fract = ((~fract + 1) << (8-m_SegmentBits));
-            fract >>= (8-m_SegmentBits);
-        }
+        for (uint32_t i=0; i<3; i++)
+            col1[i] = std::min(currColor[i], col2[i]);
+
+        TransposeToHilbertCoords(col1);
+        std::swap(col1[0], col1[2]);
+        v1 = m.ColorToValue(col1);
 
         // Add back fractional part
-        v1 <<=  m_SegmentBits;
+        v1 <<= m_SegmentBits;
         v1 += fract;
 
         v1 <<= 16 - m_Quantization;
