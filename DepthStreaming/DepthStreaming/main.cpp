@@ -53,7 +53,7 @@ int ParseOptions(int argc, char** argv, string& inputFile, string& outFolder, st
 {
     int c;
 
-    while ((c = getopt(argc, argv, "d:a::q::f::")) != -1) {
+    while ((c = getopt(argc, argv, "d:a::q:f::")) != -1) {
         switch (c) {
         case 'd':
         {
@@ -394,20 +394,22 @@ int main(int argc, char *argv[])
     uint32_t quantization = 16;
     uint32_t hilbertBits = 3;
 
-    /*
-    for (uint16_t i=0; i<16383; i++)
+
+    for (uint16_t i=16353; i<16383; i++)
     {
-        if (i == 16353)
-            cout << "EH" << endl;
+
         uint16_t val = i << 2;
+
         HilbertCoder hc(14, 3);
         Color c = hc.ValueToColor(val);
         uint16_t d = hc.ColorToValue(c);
-
-        if (d != val)
+        if (d != val) {
             cout << "Err on value " << i << ": " << abs(d - val) << endl;
+//			exit(0);
+        }
     }
-*/
+
+
     if (ParseOptions(argc, argv, inputFile, outFolder, algo, quality, outFormat) < 0)
     {
         cout << "Error parsing command line arguments.\n";

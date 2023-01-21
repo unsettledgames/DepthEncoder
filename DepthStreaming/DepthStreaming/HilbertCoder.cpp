@@ -5,6 +5,8 @@
 #include <assert.h>
 #include <iostream>
 
+using namespace std;
+
 namespace DStream
 {
     HilbertCoder::HilbertCoder(uint32_t q, uint32_t curveBits, bool optimizeSpacing/* = false*/) : Algorithm(q)
@@ -111,7 +113,7 @@ namespace DStream
                 gap *= 2;
             }
 
-			for(size_t i = 0; i < occupancy.size(); i++) {
+            for(size_t i = 0; i < occupancy.size(); i++) {
                 if(occupancy[i])
                     remap.push_back(i);
             }
@@ -169,9 +171,7 @@ namespace DStream
         // Divide in segments
         for (uint32_t i=0; i<3; i++)
         {
-            uint8_t mult = (v2[i] - v[i]) * frac;
-            mult <<= (8-m_SegmentBits);
-            mult >>= (8-m_SegmentBits);
+            int mult = (v2[i] - v[i]) * frac;
             v[i] = (v[i] << m_SegmentBits) + mult;
         }
 
@@ -179,41 +179,50 @@ namespace DStream
         else return v;
     }
 
+    template <typename T> int sgn(T val) {
+        return (T(0) < val) - (val < T(0));
+    }
+
     uint16_t HilbertCoder::ColorToValue(const Color& col)
     {
+        int side = 1<<m_SegmentBits;
         MortonCoder m(m_Quantization, m_CurveBits);
         Color col1 = m_CurveBits == 5 ? Shrink(col) : col;
         Color currColor;
 
-		uint8_t fract = 0;
-		int pos = 0;
-		for (uint32_t i=0; i<3; i++) {
-			uint8_t f = col1[i] & ((1 << m_SegmentBits)-1);
-			if(f != 0) {
-				fract = f;
-				pos = i;
-			}
-		}
+        int fract[3];
+        for (uint32_t i=0; i<3; i++) {
+            fract[i] = col1[i] & ((1 << m_SegmentBits)-1);
+            if(fract[i] >= side/2) {
+                fract[i] -= side;
+                col1[i]+= side; //round to the closest one
+            }
+        }
 
         for (uint32_t i=0; i<3; i++)
             col1[i] >>= m_SegmentBits;
+
 
         currColor = col1;
         TransposeToHilbertCoords(col1);
         std::swap(col1[0], col1[2]);
         uint16_t v1 = m.ColorToValue(col1);
 
-        uint16_t v2 = v1 + 1;
+        uint16_t v2 = std::min(v1 + 1, 1<<m_Quantization);
         Color nextCol = m.ValueToColor(v2);
         std::swap(nextCol[0], nextCol[2]);
         TransposeFromHilbertCoords(nextCol);
 
-		if(nextCol[pos] == currColor[pos])
-			fract = (1<<m_SegmentBits) - fract;
+        uint16_t v3 = std::max(v1 - 1, 0);
 
-        // Add back fractional part
+        Color prevCol = m.ValueToColor(v3);
+        std::swap(prevCol[0], prevCol[2]);
+        TransposeFromHilbertCoords(prevCol);
+
         v1 <<=  m_SegmentBits;
-        v1 += fract;
+        for(int i = 0; i < 3; i++) {
+            v1 += fract[i]*sgn(nextCol[i] - prevCol[i]);
+        }
 
         v1 <<= 16 - m_Quantization;
         return v1;
