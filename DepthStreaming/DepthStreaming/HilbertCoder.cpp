@@ -1,6 +1,7 @@
 #include <HilbertCoder.h>
 #include <MortonCoder.h>
 
+#include <cmath>
 #include <vector>
 #include <assert.h>
 #include <iostream>
@@ -9,6 +10,12 @@ using namespace std;
 
 namespace DStream
 {
+    template <typename T>
+    static inline int sgn(T val)
+    {
+        return (T(0) < val) - (val < T(0));
+    }
+
     HilbertCoder::HilbertCoder(uint32_t q, uint32_t curveBits, bool optimizeSpacing/* = false*/) : Algorithm(q)
     {
         assert(curveBits * 3 < q);
@@ -160,27 +167,31 @@ namespace DStream
 
         MortonCoder m(m_Quantization, m_CurveBits);
         Color v = m.ValueToColor(val);
-        Color v2 = m.ValueToColor(val + 1);
-
         std::swap(v[0], v[2]);
-        std::swap(v2[0], v2[2]);
-
         TransposeFromHilbertCoords(v);
+
+        // Handle curve overflow
+        if ((val+1) >= pow(2, 3 * m_CurveBits))
+        {
+            v[0] = (v[0] << m_SegmentBits) + frac;
+            for (uint32_t i=1; i<3; i++)
+                v[i] <<= m_SegmentBits;
+            return v;
+        }
+
+        Color v2 = m.ValueToColor(val + 1);
+        std::swap(v2[0], v2[2]);
         TransposeFromHilbertCoords(v2);
 
         // Divide in segments
         for (uint32_t i=0; i<3; i++)
         {
-            int mult = (v2[i] - v[i]) * frac;
+            int mult = sgn(v2[i] - v[i]) * frac;
             v[i] = (v[i] << m_SegmentBits) + mult;
         }
 
         if (m_CurveBits == 5) return Enlarge(v);
         else return v;
-    }
-
-    template <typename T> int sgn(T val) {
-        return (T(0) < val) - (val < T(0));
     }
 
     uint16_t HilbertCoder::ColorToValue(const Color& col)
@@ -193,7 +204,7 @@ namespace DStream
         int fract[3];
         for (uint32_t i=0; i<3; i++) {
             fract[i] = col1[i] & ((1 << m_SegmentBits)-1);
-            if(fract[i] >= side/2) {
+            if(fract[i] > side/2) {
                 fract[i] -= side;
                 col1[i]+= side; //round to the closest one
             }
@@ -201,7 +212,6 @@ namespace DStream
 
         for (uint32_t i=0; i<3; i++)
             col1[i] >>= m_SegmentBits;
-
 
         currColor = col1;
         TransposeToHilbertCoords(col1);

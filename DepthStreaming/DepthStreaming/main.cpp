@@ -353,10 +353,7 @@ void SaveError(const std::string& outPath, uint16_t* originalData, uint16_t* dec
     // Save error texture
     for (uint32_t e=0; e<nElements; e++)
     {
-        //uint32_t colIdx = 255.0f * (errorTextureData[e] / 65535.0f);
         float logErr = std::log2(1.0 + (float)errorTextureData[e]) * 16.0f;
-        //logErr /= std::log(1.0 + maxErr);
-        //logErr *= 255.0;
         errorTexture.setPixel(e % height, e / width, logErr);
     }
     errorTexture.save(QString(outPath.c_str()));
@@ -391,13 +388,11 @@ int main(int argc, char *argv[])
 
     string inputFile = "", outFolder = "", algo = "", outFormat = "JPG";
     uint32_t quality = 101;
-    uint32_t quantization = 16;
+    uint32_t quantization = 14;
     uint32_t hilbertBits = 3;
 
-
-    for (uint16_t i=16353; i<16383; i++)
+    for (uint32_t i=0; i<=16363; i++)
     {
-
         uint16_t val = i << 2;
 
         HilbertCoder hc(14, 3);
@@ -405,10 +400,9 @@ int main(int argc, char *argv[])
         uint16_t d = hc.ColorToValue(c);
         if (d != val) {
             cout << "Err on value " << i << ": " << abs(d - val) << endl;
-//			exit(0);
         }
+        cout << "Ok " << i << endl;
     }
-
 
     if (ParseOptions(argc, argv, inputFile, outFolder, algo, quality, outFormat) < 0)
     {
@@ -499,7 +493,7 @@ int main(int argc, char *argv[])
         }
         else if (!algorithms[a].compare("HILBERT"))
         {
-            HilbertCoder c(14, 3);
+            HilbertCoder c(quantization, hilbertBits);
             c.Encode(quantizedData, encodedDataHolder.data(), nElements);
             c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
         }
@@ -559,11 +553,11 @@ int main(int argc, char *argv[])
             }
             else if (!algorithms[a].compare("HILBERT"))
             {
-                HilbertCoder c(14, 3);
+                HilbertCoder c(quantization, hilbertBits);
                 c.Decode(bits, decodedDataHolder.data(), nElements);
                 // Clean data
                 //RemoveNoiseNaive(decodedDataHolder, mapData.Width, mapData.Height);
-                //RemoveNoiseMedian(decodedDataHolder, mapData.Width, mapData.Height);
+                RemoveNoiseMedian(decodedDataHolder, mapData.Width, mapData.Height);
             }
             else if (!algorithms[a].compare("PACKED"))
             {
