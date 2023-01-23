@@ -1,8 +1,10 @@
 #include "PackedCoder.h"
 
+#include <cmath>
+
 namespace DStream
 {
-    PackedCoder::PackedCoder(int q) : Algorithm(q){}
+    PackedCoder::PackedCoder(int q, uint32_t left) : Algorithm(q), m_LeftBits(left){}
 
     void PackedCoder::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
     {
@@ -27,15 +29,26 @@ namespace DStream
     Color PackedCoder::ValueToColor(uint16_t val)
     {
         Color ret;
+        uint32_t right = m_Quantization - m_LeftBits;
 
-        ret.x = val >> 8;
-        ret.y = val & 255;
+        ret.x = (val >> (16 - m_LeftBits)) << (8 - m_LeftBits);
+        ret.y = ((val >> (16 - m_Quantization)) & ((1 << right) - 1)) << (8 - right);
 
         return ret;
     }
 
     uint16_t PackedCoder::ColorToValue(const Color& col)
     {
-        return col.y + col.x * 256;
+        Color copy = col;
+        uint16_t highPart, lowPart;
+        uint32_t right = m_Quantization - m_LeftBits;
+
+        copy.x >>= (8 - m_LeftBits);
+        copy.y >>= (8 - right);
+
+        highPart = copy.x << (m_Quantization - m_LeftBits);
+        lowPart = copy.y;
+
+        return (highPart + lowPart) << (16 - m_Quantization);
     }
 }

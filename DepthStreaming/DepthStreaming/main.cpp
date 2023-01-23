@@ -381,29 +381,44 @@ uint16_t* Quantize(uint16_t* input, uint32_t nElements, uint32_t quantization)
     return ret;
 }
 
+string GetPathFromComponents(vector<string> path)
+{
+    string ret = "";
+    for (uint32_t i=0; i<path.size(); i++)
+        ret += path[i] + "/";
+    return ret;
+}
+
 int main(int argc, char *argv[])
 {
-    string algorithms[6] = {"HILBERT","PACKED","MORTON","TRIANGLE","PHASE","SPLIT"};
-    uint32_t minQuality = 80, maxQuality = 100;
+    string algorithms[6] = {"HILBERT", "PACKED", "SPLIT", "TRIANGLE", "PHASE", "MORTON"};
+    string outFormats[2] = {"JPG", "PNG"};
 
     string inputFile = "", outFolder = "", algo = "", outFormat = "JPG";
     uint32_t quality = 101;
-    uint32_t quantization = 14;
-    uint32_t hilbertBits = 3;
 
-    for (uint32_t i=0; i<=16363; i++)
+    uint32_t minQuality = 70;
+    uint32_t maxQuality = 100;
+    uint32_t minQuantization = 10;
+    uint32_t maxQuantization = 16;
+    uint32_t minHilbertBits = 2;
+    uint32_t maxHilbertBits = 6;
+
+/*
+    for (uint32_t i=0; i<=16383; i++)
     {
         uint16_t val = i << 2;
 
-        HilbertCoder hc(14, 3);
-        Color c = hc.ValueToColor(val);
-        uint16_t d = hc.ColorToValue(c);
+        PackedCoder pc(quantization, packedBits);
+        Color c = pc.ValueToColor(val);
+        uint16_t d = pc.ColorToValue(c);
+
         if (d != val) {
             cout << "Err on value " << i << ": " << abs(d - val) << endl;
+            exit(0);
         }
-        cout << "Ok " << i << endl;
     }
-
+*/
     if (ParseOptions(argc, argv, inputFile, outFolder, algo, quality, outFormat) < 0)
     {
         cout << "Error parsing command line arguments.\n";
@@ -428,172 +443,240 @@ int main(int argc, char *argv[])
     if (!outFolder.compare(""))
         outFolder = "Output";
     filesystem::create_directory(outFolder);
-    filesystem::create_directory(outFolder + "/Uncompressed_Decoding");
-    for (uint32_t q=minQuality; q<=maxQuality; q+=5)
-    {
-        stringstream ss;
-        ss << outFolder << "/Compressed_Encoding_" << q;
-        filesystem::create_directory(ss.str());
-    }
 
     // Prepare CSV file(s)
-    ofstream uncompressedCsv;
     ofstream compressedCsv;
-    //ofstream denoisedCsv;
-
-    uncompressedCsv.open(outFolder + "/Uncompressed.csv", ios::out);
     compressedCsv.open(outFolder + "/Compressed.csv", ios::out);
+    compressedCsv << "Configuration, Max Error, Avg Error, Despeckle Max Error, Despeckle Avg Error, Compressed Size\n";
 
-    for (uint32_t i=0; i<6; i++)
-    {
-        if (algorithms[i].compare(""))
-        {
-            uncompressedCsv << algorithms[i] << "Max,";
-            uncompressedCsv << algorithms[i] << "Avg,";
-        }
-    }
-    uncompressedCsv << endl;
-
-    for (uint32_t i=0; i<6; i++)
-    {
-        if (!algorithms[i].compare(""))
-            break;
-        for (uint32_t q=minQuality; q<=maxQuality; q+=5)
-        {
-            compressedCsv << algorithms[i] << q << "Max,";
-            compressedCsv << algorithms[i] << q << "Avg,";
-        }
-    }
-    compressedCsv << endl;
-
-    // Load image
+    // Load image, setup benchmark
     Parser parser(inputFile, InputFormat::ASC);
     DepthmapData mapData;
     uint16_t* originalData = parser.Parse(mapData);
-
     uint32_t nElements = mapData.Width * mapData.Height;
+
     vector<uint8_t> encodedDataHolder(nElements * 3, 0);
     vector<uint16_t> decodedDataHolder(nElements, 0);
-    auto colorMap = LoadColorMap("error_color_map.csv");
-    uint16_t* quantizedData = Quantize(originalData, mapData.Width * mapData.Height, quantization);
 
-    // Benchmark said image
+    vector<string> folders;
+
+    auto colorMap = LoadColorMap("error_color_map.csv");
+
+    stringstream utilitySs;
+    std::filesystem::path currPathFs;
+    folders.push_back(outFolder);
+
+    // ALGORITHM
     for (uint32_t a=0; a<6; a++)
     {
-        float maxErr, avgErr;
         if (!algorithms[a].compare(""))
             break;
+        folders.push_back(algorithms[a]);
+        currPathFs = GetPathFromComponents(folders);
+        if (!filesystem::exists(currPathFs))
+            filesystem::create_directory(currPathFs);
 
-        // Encode and decode uncompressed data with current algorithm
-        if (!algorithms[a].compare("MORTON"))
+        // QUANTIZATION
+        for (uint32_t q=minQuantization; q<=maxQuantization; q+=2)
         {
-            MortonCoder c(quantization, 6);
-            c.Encode(quantizedData, encodedDataHolder.data(), nElements);
-            c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
-        }
-        else if (!algorithms[a].compare("HILBERT"))
-        {
-            HilbertCoder c(quantization, hilbertBits);
-            c.Encode(quantizedData, encodedDataHolder.data(), nElements);
-            c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
-        }
-        else if (!algorithms[a].compare("PACKED"))
-        {
-            PackedCoder c(quantization);
-            c.Encode(quantizedData, encodedDataHolder.data(), nElements);
-            c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
-        }
-        else if (!algorithms[a].compare("SPLIT"))
-        {
-            SplitCoder c(quantization);
-            c.Encode(quantizedData, encodedDataHolder.data(), nElements);
-            c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
-        }
-        else if (!algorithms[a].compare("PHASE"))
-        {
-            PhaseCoder c(quantization);
-            c.Encode(quantizedData, encodedDataHolder.data(), nElements);
-            c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
-        }
-        else if (!algorithms[a].compare("TRIANGLE"))
-        {
-            TriangleCoder c(quantization);
-            c.Encode(quantizedData, encodedDataHolder.data(), nElements);
-            c.Decode(encodedDataHolder.data(), decodedDataHolder.data(), nElements);
-        }
+            utilitySs.str("");
+            utilitySs << "Quantization" << q;
+            folders.push_back(utilitySs.str());
 
+            currPathFs = GetPathFromComponents(folders);
+            if (!filesystem::exists(currPathFs))
+                filesystem::create_directory(currPathFs);
 
-        SaveError(outFolder + "/Uncompressed_Decoding/error_" + algorithms[a], originalData, decodedDataHolder.data(), mapData.Width,
-                  mapData.Height, colorMap, maxErr, avgErr);
-        Writer outWriter(outFolder + "/Uncompressed_Decoding/decoded_" + algorithms[a] + ".png");
-        outWriter.Write(decodedDataHolder.data(), mapData.Width, mapData.Height);
-        uncompressedCsv << maxErr << "," << avgErr << ",";
+            uint16_t* quantizedData = Quantize(originalData, mapData.Width * mapData.Height, q);
+            uint32_t parameterStart = 0;
+            uint32_t parameterMax = 1;
+            uint32_t parameterIncrease = 1;
 
-        for (uint32_t q=minQuality; q<=maxQuality; q+=5)
-        {
-            // Output file name
-            stringstream ss;
-            ss << outFolder << "/Compressed_Encoding_" << q << "/";
-
-            // Save in jpeg format, reload and check the error
-            Writer writer(ss.str() + algorithms[a] + "_encoded.jpg");
-            writer.Write(encodedDataHolder.data(), mapData.Width, mapData.Height, OutputFormat::JPG, false, q);
-
-            cout << "Path: " << ss.str() + algorithms[a] + "_encoded.jpg" << endl;
-
-            QImage img(QString((ss.str() + algorithms[a] + "_encoded.jpg").c_str()));
-            img = img.convertToFormat(QImage::Format_RGB888);
-            auto bits = img.bits();
-
-            // Decode compressed data
-            if (!algorithms[a].compare("MORTON"))
+            if (!algorithms[a].compare("HILBERT"))
             {
-                MortonCoder c(quantization, 6);
-                c.Decode(bits, decodedDataHolder.data(), nElements);
-            }
-            else if (!algorithms[a].compare("HILBERT"))
-            {
-                HilbertCoder c(quantization, hilbertBits);
-                c.Decode(bits, decodedDataHolder.data(), nElements);
-                // Clean data
-                //RemoveNoiseNaive(decodedDataHolder, mapData.Width, mapData.Height);
-                RemoveNoiseMedian(decodedDataHolder, mapData.Width, mapData.Height);
+                uint32_t maxHilbertBits, minHilbertBits;
+                bool foundMin = false;
+
+                for (uint32_t i=2; i<=6; i++)
+                {
+                    if (!(i * 3 < q))
+                        continue;
+                    int seg = q - 3 * i;
+                    if (i + seg > 8)
+                        continue;
+
+                    if (!foundMin)
+                    {
+                        foundMin = true;
+                        minHilbertBits = i;
+                    }
+                    else
+                        maxHilbertBits = i;
+                }
+
+
+                parameterStart = minHilbertBits;
+                parameterMax = maxHilbertBits;
+                parameterIncrease = 1;
             }
             else if (!algorithms[a].compare("PACKED"))
             {
-                PackedCoder c(quantization);
-                c.Decode(bits, decodedDataHolder.data(), nElements);
-            }
-            else if (!algorithms[a].compare("SPLIT"))
-            {
-                SplitCoder c(quantization);
-                c.Decode(bits, decodedDataHolder.data(), nElements);
-            }
-            else if (!algorithms[a].compare("PHASE"))
-            {
-                PhaseCoder c(quantization);
-                c.Decode(bits, decodedDataHolder.data(), nElements);
-            }
-            else if (!algorithms[a].compare("TRIANGLE"))
-            {
-                TriangleCoder c(quantization);
-                c.Decode(bits, decodedDataHolder.data(), nElements);
+                uint32_t minLeftBits = q - 8;
+                uint32_t maxLeftBits = 8;
+
+                parameterStart = minLeftBits;
+                parameterMax = maxLeftBits;
+                parameterIncrease = 1;
             }
 
-            // Save decoded textures
-            writer.SetPath(ss.str() + algorithms[a] + "_decoded.png");
-            writer.Write(decodedDataHolder.data(), mapData.Width, mapData.Height);
+            // Cycle through parameters
+            for (uint32_t p=parameterStart; p<=parameterMax; p+=parameterIncrease)
+            {
+                if (parameterMax > 1)
+                {
+                    utilitySs.str("");
+                    utilitySs << "Parameter" << p;
+                    folders.push_back(utilitySs.str());
 
-            // Save decoded error
-            SaveError(ss.str() + algorithms[a] + "_error.png", originalData, decodedDataHolder.data(), mapData.Width, mapData.Height,
-                      colorMap, maxErr, avgErr);
-            compressedCsv << maxErr << "," << avgErr << ",";
+                    currPathFs = GetPathFromComponents(folders);
+                    if (!filesystem::exists(currPathFs))
+                        filesystem::create_directory(currPathFs);
+                }
+
+                // Encode uncompressed data with current algorithm
+                if (!algorithms[a].compare("MORTON"))
+                {
+                    MortonCoder c(q, 6);
+                    c.Encode(quantizedData, encodedDataHolder.data(), nElements);
+                }
+                else if (!algorithms[a].compare("HILBERT"))
+                {
+                    cout << "Hilbert bits: " << p << endl;
+                    HilbertCoder c(q, p);
+                    c.Encode(quantizedData, encodedDataHolder.data(), nElements);
+                }
+                else if (!algorithms[a].compare("PACKED"))
+                {
+                    PackedCoder c(q, p);
+                    c.Encode(quantizedData, encodedDataHolder.data(), nElements);
+                }
+                else if (!algorithms[a].compare("SPLIT"))
+                {
+                    SplitCoder c(q);
+                    c.Encode(quantizedData, encodedDataHolder.data(), nElements);
+                }
+                else if (!algorithms[a].compare("PHASE"))
+                {
+                    PhaseCoder c(q);
+                    c.Encode(quantizedData, encodedDataHolder.data(), nElements);
+                }
+                else if (!algorithms[a].compare("TRIANGLE"))
+                {
+                    TriangleCoder c(q);
+                    c.Encode(quantizedData, encodedDataHolder.data(), nElements);
+                }
+
+                string currPath = GetPathFromComponents(folders);
+                Writer png(currPath + "uncompressed.png");
+                png.Write(encodedDataHolder.data(), mapData.Width, mapData.Height, OutputFormat::PNG);
+
+                cout << currPath << endl;
+
+                // Save encoded in JPG
+                for (uint32_t j=minQuality; j<=maxQuality; j+=5)
+                {
+                    std::stringstream ss;
+                    ss << "Quality" << j;
+                    Writer jpg(currPath + ss.str() + ".jpg");
+                    jpg.Write(encodedDataHolder.data(), mapData.Width, mapData.Height, OutputFormat::JPG, false, j);
+                }
+
+                // Load JPG, load PNG, decode and measure
+                for (uint32_t f=0; f<2; f++)
+                {
+                    // IF JPG: QUALITY
+                    if (outFormats[f].compare("JPG"))
+                    {
+                        for (uint32_t j=minQuality; j<=maxQuality; j+=5)
+                        {
+                            std::stringstream ss;
+                            ss << currPath << "Quality" << j;
+
+                            QImage img(QString((ss.str() + ".jpg").c_str()));
+                            img = img.convertToFormat(QImage::Format_RGB888);
+                            auto bits = img.bits();
+
+                            // Decode compressed data
+                            if (!algorithms[a].compare("MORTON"))
+                            {
+                                MortonCoder c(q, 6);
+                                c.Decode(bits, decodedDataHolder.data(), nElements);
+                            }
+                            else if (!algorithms[a].compare("HILBERT"))
+                            {
+                                HilbertCoder c(q, p);
+                                c.Decode(bits, decodedDataHolder.data(), nElements);
+                            }
+                            else if (!algorithms[a].compare("PACKED"))
+                            {
+                                PackedCoder c(q, p);
+                                c.Decode(bits, decodedDataHolder.data(), nElements);
+                            }
+                            else if (!algorithms[a].compare("SPLIT"))
+                            {
+                                SplitCoder c(q);
+                                c.Decode(bits, decodedDataHolder.data(), nElements);
+                            }
+                            else if (!algorithms[a].compare("PHASE"))
+                            {
+                                PhaseCoder c(q);
+                                c.Decode(bits, decodedDataHolder.data(), nElements);
+                            }
+                            else if (!algorithms[a].compare("TRIANGLE"))
+                            {
+                                TriangleCoder c(q);
+                                c.Decode(bits, decodedDataHolder.data(), nElements);
+                            }
+
+                            // Save decoded textures
+                            Writer writer(ss.str() + "_decoded.png");
+                            writer.Write(decodedDataHolder.data(), mapData.Width, mapData.Height);
+
+                            // Save decoded error
+                            float maxErr, avgErr;
+                            SaveError(ss.str() + "_error.png", originalData, decodedDataHolder.data(), mapData.Width, mapData.Height,
+                                      colorMap, maxErr, avgErr);
+
+                            if (!algorithms[a].compare("HILBERT"))
+                            {
+                                // Clean data
+                                RemoveNoiseMedian(decodedDataHolder, mapData.Width, mapData.Height);
+                                // Save denoised, save error
+                                Writer writer(ss.str() + "_decoded_denoised.png");
+                                writer.Write(decodedDataHolder.data(), mapData.Width, mapData.Height);
+
+                                SaveError(ss.str() + "denoised_error.png", originalData, decodedDataHolder.data(), mapData.Width, mapData.Height,
+                                          colorMap, maxErr, avgErr);
+                            }
+                        }
+                    }
+                    else
+                    {
+
+                    }
+                }
+
+                if (parameterMax > 1)
+                    folders.pop_back();
+            }
+
+            folders.pop_back();
+            delete[] quantizedData;
         }
+        folders.pop_back();
     }
 
     delete[] originalData;
-    delete[] quantizedData;
-
     return 0;
 }
 

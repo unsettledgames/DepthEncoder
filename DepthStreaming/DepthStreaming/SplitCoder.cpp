@@ -29,44 +29,34 @@ namespace DStream
     Color SplitCoder::ValueToColor(uint16_t val)
     {
         Color ret;
+        uint8_t highPart, lowPart;
 
-        float Ld, Ha;
+        highPart = val >> 8;
+        if (highPart % 2 == 0) lowPart = val % 256;
+        else lowPart = 255 -  (val % 256);
 
-        float mod = fmod(val / 256.0f, 2.0f);
-        if (mod <= 1)
-            Ha = mod;
-        else
-            Ha = 2 - mod;
-
-        Ld = val >> 8; Ha *= 255.0f;
-
-        if (mod <= 1)
-            Ha = std::ceil(Ha);
-        else
-            Ha = std::floor(Ha);
-
-        ret[0] = Ld; ret[1] = Ha; ret[2] = 0.0f;
-
+        ret[0] = highPart; ret[1] = lowPart; ret[2] = 0.0f;
         return ret;
     }
 
     uint16_t SplitCoder::ColorToValue(const Color& col)
     {
-        float Ld = col.x;
-        float Ha = col.y;
-        int m = (int)col.x % 2;
-        float delta = 0;
+        uint16_t highPart = col.x;
+        uint16_t lowPart = col.y;
+        uint16_t delta = 0;
+
+        int m = highPart % 2;
 
         switch (m) {
         case 0:
-            delta = Ha;
+            delta = lowPart;
             break;
         case 1:
-            delta = 255.0f - Ha;
+            delta = 255 - lowPart;
             break;
         }
 
-        return Ld * 256.0f + delta;
+        return highPart * 256 + delta;
     }
 }
 
