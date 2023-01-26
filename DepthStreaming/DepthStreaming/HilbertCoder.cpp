@@ -171,12 +171,32 @@ namespace DStream
         TransposeFromHilbertCoords(v);
 
         // Handle curve overflow
-        if ((val+1) >= pow(2, 3 * m_CurveBits))
+        if ((val+1) >= (1 << (3 * m_CurveBits)))
         {
-            v[0] = (v[0] << m_SegmentBits) + frac;
-            for (uint32_t i=1; i<3; i++)
-                v[i] <<= m_SegmentBits;
-            return v;
+            // Compute previous to see the direction of the curve
+            Color v2 = m.ValueToColor(val + 1);
+            std::swap(v2[0], v2[2]);
+            TransposeFromHilbertCoords(v2);
+
+            for (uint32_t i=0; i<3; i++)
+            {
+                // Add frac in that direction
+                if (v2[i] != v[i])
+                {
+                    v[i] = (v[i] << m_SegmentBits) + sgn(max(v2[i], v[i]) - min(v2[i], v[i])) * frac/2;
+                    for (uint32_t j=0; j<3; j++)
+                    {
+                        if (i != j)
+                            v[j] <<= m_SegmentBits;
+                        if (m_CurveBits != 5)
+                            v[j] <<= (8 - m_CurveBits - m_SegmentBits);
+                    }
+
+                    if (m_CurveBits == 5)
+                        return Enlarge(v);
+                    return v;
+                }
+            }
         }
 
         Color v2 = m.ValueToColor(val + 1);
@@ -187,11 +207,15 @@ namespace DStream
         for (uint32_t i=0; i<3; i++)
         {
             int mult = sgn(v2[i] - v[i]) * frac;
-            v[i] = (v[i] << m_SegmentBits) + mult;
+            v[i] = ((v[i] << m_SegmentBits) + mult);
+
+            if (m_CurveBits != 5)
+                v[i] <<= (8 - m_CurveBits - m_SegmentBits);
         }
 
-        if (m_CurveBits == 5) return Enlarge(v);
-        else return v;
+        if (m_CurveBits == 5)
+            return Enlarge(v);
+        return v;
     }
 
     uint16_t HilbertCoder::ColorToValue(const Color& col)
@@ -201,12 +225,16 @@ namespace DStream
         Color col1 = m_CurveBits == 5 ? Shrink(col) : col;
         Color currColor;
 
+        if (m_CurveBits != 5)
+            for (uint32_t i=0; i<3; i++)
+                col1[i] >>= (8 - m_CurveBits - m_SegmentBits);
+
         int fract[3];
         for (uint32_t i=0; i<3; i++) {
             fract[i] = col1[i] & ((1 << m_SegmentBits)-1);
-            if(fract[i] > side/2) {
+            if (fract[i] >= side/2) {
                 fract[i] -= side;
-                col1[i]+= side; //round to the closest one
+                col1[i] += side/2; //round to the closest one
             }
         }
 
