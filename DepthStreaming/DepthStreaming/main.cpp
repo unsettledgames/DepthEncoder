@@ -600,7 +600,7 @@ int main(int argc, char *argv[])
         filesystem::create_directory(currPathFs);
 
         // QUANTIZATION
-        for (uint32_t q=minQuantization; q<=maxQuantization; q+=2)
+        for (uint32_t q=10; q<=maxQuantization; q+=2)
         {
             utilitySs.str("");
             utilitySs << "Quantization" << q;
@@ -638,19 +638,28 @@ int main(int argc, char *argv[])
                 parameterMax = maxHilbertBits;
                 parameterIncrease = 1;
 
-                for (uint32_t i=parameterStart; i<=parameterMax; i++)
+                /*
+                for (uint32_t i=4; i<=parameterMax; i++)
                 {
                     HilbertCoder hc(q, i);
-                    for (uint32_t j=1016; j<(1 << q)-1; j++)
+                    for (uint32_t j=0; j<(1 << q)-1; j++)
                     {
                         uint16_t v = j << (16 - q);
                         Color c = hc.ValueToColor(v);
+                        c[0] += 8;
                         uint16_t val = hc.ColorToValue(c);
 
+                        if (abs(v - val) > 500)
+                        {
+                            c = hc.ValueToColor(v);
+                            c[0] += 8;
+                            val = hc.ColorToValue(c);
+                        }
                         if (v != val)
                             cout << "HILBERT ERROR, q: " << q << ", curve: " << i << ", value: " << j << ", error: " << abs(v - val) << endl;
                     }
                 }
+                */
             }
             else if (!algorithms[a].compare("PACKED"))
             {

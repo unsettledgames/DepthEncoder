@@ -4,6 +4,8 @@
 #include <Algorithm.h>
 #include <Vec3.h>
 
+#include <vector>
+
 // Credits for Hilbert convertions: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
 
 namespace DStream
@@ -30,6 +32,14 @@ namespace DStream
         uint32_t m_CurveBits;
         uint32_t m_SegmentBits;
         bool m_OptimizeSpacing;
+
+        uint16_t*** m_Table;
+        std::vector<uint16_t> m_XErrors;
+        std::vector<uint16_t> m_YErrors;
+        std::vector<uint16_t> m_ZErrors;
+
+        std::vector<uint16_t> m_EnlargeTable;
+        std::vector<uint16_t> m_ShrinkTable;
     };
 }
 

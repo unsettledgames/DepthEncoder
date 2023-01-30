@@ -25,6 +25,133 @@ namespace DStream
 
         assert(m_CurveBits + m_SegmentBits <= 8);
         m_OptimizeSpacing = optimizeSpacing;
+
+        // Init tables
+        MortonCoder m(q, curveBits);
+        uint32_t side = 1 << (curveBits + m_SegmentBits);
+        m_Table = new uint16_t**[side];
+        for (uint32_t i=0; i<side; i++)
+        {
+            m_Table[i] = new uint16_t*[side];
+            for (uint32_t j=0; j<side; j++)
+            {
+                m_Table[i][j] = new uint16_t[side];
+                for (uint32_t k=0; k<side; k++)
+                {
+                    Color c = {(uint8_t)i, (uint8_t)j, (uint8_t)k};
+                    std::swap(c[0], c[2]);
+                    TransposeFromHilbertCoords(c);
+                    m_Table[i][j][k] = m.ColorToValue(c);
+                }
+            }
+        }
+
+        m_XErrors.resize(side-1);
+        // Init error vectors
+        for (uint32_t k=0; k<side-1; k++)
+        {
+            uint16_t max = 0;
+            for (uint32_t i=0; i<side; i++)
+            {
+                for (uint32_t j=0; j<side; j++)
+                {
+                    max = std::max<uint16_t>(max, abs(m_Table[k][i][j] - m_Table[k+1][i][j]));
+                }
+            }
+            m_XErrors[k] = max;
+        }
+/*
+        for (uint32_t k=0; k<side-1; k++)
+        {
+            uint16_t max = 0;
+            for (uint32_t i=0; i<side; i++)
+            {
+                for (uint32_t j=0; j<side; j++)
+                {
+                    max = std::max<uint16_t>(max, abs(m_Table[i][k][j] - m_Table[i][k+1][j]));
+                }
+            }
+            m_YErrors.push_back(max);
+        }
+
+        for (uint32_t k=0; k<side-1; k++)
+        {
+            uint16_t max = 0;
+            for (uint32_t i=0; i<side; i++)
+            {
+                for (uint32_t j=0; j<side; j++)
+                {
+                    max = std::max<uint16_t>(max, abs(m_Table[i][j][k] - m_Table[i][j][k+1]));
+                }
+            }
+            m_ZErrors.push_back(max);
+        }
+*/
+
+        for (uint16_t i=0; i<side; i++)
+        {
+            for (uint16_t j=0; j<side; j++)
+                delete[] m_Table[i][j];
+            delete[] m_Table[i];
+        }
+
+        uint32_t count=0;
+        uint32_t errorSum = 0;
+
+        std::vector<uint16_t> scaledValues;
+        scaledValues.push_back(0);
+
+        for (uint32_t i=0; i<m_XErrors.size(); i++)
+            errorSum += m_XErrors[i];
+        std::vector<uint16_t> advances;
+        for (uint32_t i=0; i<m_XErrors.size(); i++)
+            advances.push_back(std::round(((float)m_XErrors[i] / errorSum) * 256.0f));
+
+        m_EnlargeTable.push_back(0);
+
+        for (uint32_t i=0; i<m_XErrors.size(); i++)
+        {
+            float advance = advances[i];
+
+            for (uint32_t j=0; j<advance/2; j++)
+            {
+                m_ShrinkTable.push_back(i);
+                count++;
+            }
+            m_EnlargeTable.push_back(count);
+            for (uint32_t j=0; j<advance/2; j++)
+            {
+                m_ShrinkTable.push_back(i+1);
+                count++;
+            }
+/*
+            if (i == m_XErrors.size()/2)
+            {
+                m_ShrinkTable.push_back(count);
+                if (m_EnlargeTable[m_EnlargeTable.size()-1] != count)
+                    m_EnlargeTable.push_back(count);
+
+                for (uint32_t j=i+1; j<newSize/2; j++)
+                {
+                    m_ShrinkTable.push_back(i);
+                    count++;
+                }
+
+                count = newSize - (i+1);
+                m_EnlargeTable.push_back(count);
+                for (uint32_t j=newSize/2; j<newSize-(i+1); j++)
+                    m_ShrinkTable.push_back(i+1);
+            }
+            else
+            {
+                m_ShrinkTable.push_back(i);
+                if (m_EnlargeTable.size() == 0 || m_EnlargeTable[m_EnlargeTable.size()-1] != count)
+                    m_EnlargeTable.push_back(count);
+                count++;
+            }*/
+        }
+
+        std::cout << "End of hilbert initialization" << std::endl;
     }
 
     void HilbertCoder::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
@@ -83,7 +210,7 @@ namespace DStream
 
         for (Q = M; Q > 1; Q >>= 1) {
             P = Q - 1;
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 3; i++) {
                 if (X[i] & Q) // Invert
                     X[0] ^= P;
                 else { // Exchange
@@ -91,6 +218,7 @@ namespace DStream
                     X[0] ^= t;
                     X[i] ^= t;
                 }
+            }
         }
 
         // Gray encode
@@ -105,58 +233,16 @@ namespace DStream
 
     Color HilbertCoder::Enlarge(Color col)
     {
-        Color ret = col;
-        static std::vector<uint8_t> occupancy;
-        static std::vector<uint8_t> remap;
-        if(occupancy.size() == 0) {
-            occupancy.push_back(1);
-            int gap = 1;
-            while(gap < 64) {
-                int end = occupancy.size();
-                for(int i = 0; i < gap; i++)
-                    occupancy.push_back(0);
-                for(int i = 0; i < end; i++)
-                    occupancy.push_back(occupancy[i]);
-                gap *= 2;
-            }
-
-            for(size_t i = 0; i < occupancy.size(); i++) {
-                if(occupancy[i])
-                    remap.push_back(i);
-            }
-        }
         for(int k = 0; k < 3; k++)
-            ret[k] = remap[ret[k]];
-        return ret;
+            col[k] = m_EnlargeTable[col[k]];
+        return col;
     }
 
     Color HilbertCoder::Shrink(Color col)
     {
-        static std::vector<uint8_t> occupancy;
-        static std::vector<uint8_t> remap;
-        Color ret = col;
-
-        if(occupancy.size() == 0) {
-            occupancy.push_back(0);
-            int gap = 1;
-            while(gap < 64) {
-                int end = occupancy.size();
-                int last = occupancy.back();
-                for(int i = 0; i < gap; i++) {
-                    if(i <= gap/2)
-                        occupancy.push_back(last);
-                    else
-                        occupancy.push_back(last+1);
-                }
-                for(int i = 0; i < end; i++)
-                    occupancy.push_back(occupancy[i] + last+1);
-                gap *= 2;
-            }
-        }
         for(int k = 0; k < 3; k++)
-            ret[k] = occupancy[ret[k]];
-
-        return ret;
+            col[k] = m_ShrinkTable[col[k]];
+        return col;
     }
 
     Color HilbertCoder::ValueToColor(uint16_t val)
@@ -171,6 +257,7 @@ namespace DStream
         TransposeFromHilbertCoords(v);
 
         // Handle curve overflow
+/*
         if ((val+1) >= (1 << (3 * m_CurveBits)))
         {
             // Compute previous to see the direction of the curve
@@ -192,13 +279,11 @@ namespace DStream
                             v[j] <<= (8 - m_CurveBits - m_SegmentBits);
                     }
 
-                    if (m_CurveBits == 5)
-                        return Enlarge(v);
-                    return v;
+                    return Enlarge(v);
                 }
             }
         }
-
+*/
         Color v2 = m.ValueToColor(val + 1);
         std::swap(v2[0], v2[2]);
         TransposeFromHilbertCoords(v2);
@@ -206,28 +291,19 @@ namespace DStream
         // Divide in segments
         for (uint32_t i=0; i<3; i++)
         {
-            int mult = sgn(v2[i] - v[i]) * frac;
-            v[i] = ((v[i] << m_SegmentBits) + mult);
-
-            if (m_CurveBits != 5)
-                v[i] <<= (8 - m_CurveBits - m_SegmentBits);
+            int mult = (v2[i] - v[i]) * frac;
+            v[i] = (v[i] << m_SegmentBits) + mult;
         }
 
-        if (m_CurveBits == 5)
-            return Enlarge(v);
-        return v;
+        return Enlarge(v);
     }
 
     uint16_t HilbertCoder::ColorToValue(const Color& col)
     {
         int side = 1<<m_SegmentBits;
         MortonCoder m(m_Quantization, m_CurveBits);
-        Color col1 = m_CurveBits == 5 ? Shrink(col) : col;
+        Color col1 = Shrink(col);
         Color currColor;
-
-        if (m_CurveBits != 5)
-            for (uint32_t i=0; i<3; i++)
-                col1[i] >>= (8 - m_CurveBits - m_SegmentBits);
 
         int fract[3];
         for (uint32_t i=0; i<3; i++) {
