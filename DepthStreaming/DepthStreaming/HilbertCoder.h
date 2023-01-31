@@ -18,7 +18,7 @@ namespace DStream
         void Decode(uint8_t* values, uint16_t* dest, uint32_t count);
 
         Color ValueToColor(uint16_t val);
-        uint16_t ColorToValue(const Color& col);
+        uint16_t ColorToValue(const Color& col, bool shrink = true);
 
     private:
         // Hilbert transpose
@@ -38,8 +38,8 @@ namespace DStream
         std::vector<uint16_t> m_YErrors;
         std::vector<uint16_t> m_ZErrors;
 
-        std::vector<uint16_t> m_EnlargeTable;
-        std::vector<uint16_t> m_ShrinkTable;
+        std::vector<uint16_t> m_EnlargeTables[3];
+        std::vector<uint16_t> m_ShrinkTables[3];
     };
 }
 

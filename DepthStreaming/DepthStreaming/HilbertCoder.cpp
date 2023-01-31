@@ -16,6 +16,45 @@ namespace DStream
         return (T(0) < val) - (val < T(0));
     }
 
+    static void TransposeAdvanceToRange(std::vector<uint16_t>& vec, uint16_t rangeMax)
+    {
+        uint32_t errorSum = 0;
+        // Scale advance vector from 0 to 256
+        for (uint32_t i=0; i<vec.size(); i++)
+            errorSum += vec[i];
+
+        for (uint32_t i=0; i<vec.size(); i++)
+            vec[i] = std::round(((float)vec[i] / errorSum) * rangeMax);
+    }
+
+    static void RemoveZerosFromAdvance(std::vector<uint16_t>& advances)
+    {
+        std::vector<uint16_t> nonZeros;
+        uint16_t zeroes = 0;
+        for (uint16_t i=0; i<advances.size(); i++)
+        {
+            if (advances[i] == 0)
+            {
+                advances[i] = 1;
+                zeroes++;
+            }
+            else
+                nonZeros.push_back(advances[i]);
+        }
+
+        TransposeAdvanceToRange(nonZeros, 256 - zeroes);
+
+        uint32_t nonzeroIdx = 0;
+        for (uint32_t i=0; i<advances.size(); i++)
+        {
+            if (advances[i] != 1)
+            {
+                advances[i] = nonZeros[nonzeroIdx];
+                nonzeroIdx++;
+            }
+        }
+    }
+
     HilbertCoder::HilbertCoder(uint32_t q, uint32_t curveBits, bool optimizeSpacing/* = false*/) : Algorithm(q)
     {
         assert(curveBits * 3 < q);
@@ -27,66 +66,68 @@ namespace DStream
         m_OptimizeSpacing = optimizeSpacing;
 
         // Init tables
-        MortonCoder m(q, curveBits);
         uint32_t side = 1 << (curveBits + m_SegmentBits);
+
+        // Init table memory
         m_Table = new uint16_t**[side];
         for (uint32_t i=0; i<side; i++)
         {
             m_Table[i] = new uint16_t*[side];
             for (uint32_t j=0; j<side; j++)
-            {
                 m_Table[i][j] = new uint16_t[side];
-                for (uint32_t k=0; k<side; k++)
+        }
+
+
+        for (uint16_t i=0; i<side; i++)
+        {
+            for (uint16_t j=0; j<side; j++)
+            {
+                for (uint16_t k=0; k<side; k++)
                 {
                     Color c = {(uint8_t)i, (uint8_t)j, (uint8_t)k};
-                    std::swap(c[0], c[2]);
-                    TransposeFromHilbertCoords(c);
-                    m_Table[i][j][k] = m.ColorToValue(c);
+                    m_Table[i][j][k] = ColorToValue(c, false);
                 }
             }
         }
-
+        /*
+        cout << "Table" << endl;
+        for (uint32_t i=1; i<side; i++)
+        {
+            for (uint32_t j=0; j<side; j++)
+                cout << m_Table[0][i][j] << ",";
+            cout << endl;
+        }
+*/
         m_XErrors.resize(side-1);
         // Init error vectors
         for (uint32_t k=0; k<side-1; k++)
         {
             uint16_t max = 0;
             for (uint32_t i=0; i<side; i++)
-            {
                 for (uint32_t j=0; j<side; j++)
-                {
                     max = std::max<uint16_t>(max, abs(m_Table[k][i][j] - m_Table[k+1][i][j]));
-                }
-            }
             m_XErrors[k] = max;
         }
-/*
+
+        m_YErrors.resize(side-1);
         for (uint32_t k=0; k<side-1; k++)
         {
             uint16_t max = 0;
             for (uint32_t i=0; i<side; i++)
-            {
                 for (uint32_t j=0; j<side; j++)
-                {
                     max = std::max<uint16_t>(max, abs(m_Table[i][k][j] - m_Table[i][k+1][j]));
-                }
-            }
-            m_YErrors.push_back(max);
+            m_YErrors[k] = max;
         }
 
+        m_ZErrors.resize(side-1);
         for (uint32_t k=0; k<side-1; k++)
         {
             uint16_t max = 0;
             for (uint32_t i=0; i<side; i++)
-            {
                 for (uint32_t j=0; j<side; j++)
-                {
                     max = std::max<uint16_t>(max, abs(m_Table[i][j][k] - m_Table[i][j][k+1]));
-                }
-            }
-            m_ZErrors.push_back(max);
+            m_ZErrors[k] = max;
         }
-*/
 
         for (uint16_t i=0; i<side; i++)
         {
@@ -95,63 +136,42 @@ namespace DStream
             delete[] m_Table[i];
         }
 
-        uint32_t count=0;
-        uint32_t errorSum = 0;
+        std::vector<uint16_t> errors[3] = {m_XErrors, m_YErrors, m_ZErrors};
 
-        std::vector<uint16_t> scaledValues;
-        scaledValues.push_back(0);
-
-        for (uint32_t i=0; i<m_XErrors.size(); i++)
-            errorSum += m_XErrors[i];
-        std::vector<uint16_t> advances;
-        for (uint32_t i=0; i<m_XErrors.size(); i++)
-            advances.push_back(std::round(((float)m_XErrors[i] / errorSum) * 256.0f));
-
-        m_EnlargeTable.push_back(0);
-
-        for (uint32_t i=0; i<m_XErrors.size(); i++)
+        for (uint32_t e=0; e<3; e++)
         {
-            float advance = advances[i];
+            uint32_t nextNumber=0;
+            uint32_t errorSum = 0;
 
-            for (uint32_t j=0; j<advance/2; j++)
-            {
-                m_ShrinkTable.push_back(i);
-                count++;
-            }
-            m_EnlargeTable.push_back(count);
-            for (uint32_t j=0; j<advance/2; j++)
-            {
-                m_ShrinkTable.push_back(i+1);
-                count++;
-            }
-/*
-            if (i == m_XErrors.size()/2)
-            {
-                m_ShrinkTable.push_back(count);
-                if (m_EnlargeTable[m_EnlargeTable.size()-1] != count)
-                    m_EnlargeTable.push_back(count);
+            TransposeAdvanceToRange(errors[e], 256);
+            RemoveZerosFromAdvance(errors[e]);
 
-                for (uint32_t j=i+1; j<newSize/2; j++)
+            m_EnlargeTables[e].push_back(0);
+            m_ShrinkTables[e].push_back(0);
+
+            for (uint32_t i=1; i<errors[e].size()+1; i++)
+            {
+                float advance = errors[e][i-1];
+                nextNumber += advance;
+
+                if (advance == 1)
                 {
-                    m_ShrinkTable.push_back(i);
-                    count++;
+                    m_ShrinkTables[e].push_back(i);
+                    m_EnlargeTables[e].push_back(nextNumber);
                 }
+                else
+                {
+                    m_EnlargeTables[e].push_back(nextNumber);
 
-                count = newSize - (i+1);
-                m_EnlargeTable.push_back(count);
-                for (uint32_t j=newSize/2; j<newSize-(i+1); j++)
-                    m_ShrinkTable.push_back(i+1);
+                    for (uint32_t j=0; j<std::floor(advance/2); j++)
+                        m_ShrinkTables[e].push_back(i-1);
+                    for (uint32_t j=0; j<std::ceil(advance/2); j++)
+                        m_ShrinkTables[e].push_back(i);
+                }
             }
-            else
-            {
-                m_ShrinkTable.push_back(i);
-                if (m_EnlargeTable.size() == 0 || m_EnlargeTable[m_EnlargeTable.size()-1] != count)
-                    m_EnlargeTable.push_back(count);
-                count++;
-            }*/
         }
 
-        std::cout << "End of hilbert initialization" << std::endl;
+        std::cout << "End of hilbert init Q: " << m_Quantization << ", curve: " << m_CurveBits << ", seg: " << m_SegmentBits << std::endl;
     }
 
     void HilbertCoder::Encode(uint16_t* values, uint8_t* dest, uint32_t count)
@@ -234,14 +254,14 @@ namespace DStream
     Color HilbertCoder::Enlarge(Color col)
     {
         for(int k = 0; k < 3; k++)
-            col[k] = m_EnlargeTable[col[k]];
+            col[k] = m_EnlargeTables[k][col[k]];
         return col;
     }
 
     Color HilbertCoder::Shrink(Color col)
     {
         for(int k = 0; k < 3; k++)
-            col[k] = m_ShrinkTable[col[k]];
+            col[k] = m_ShrinkTables[k][col[k]];
         return col;
     }
 
@@ -298,11 +318,15 @@ namespace DStream
         return Enlarge(v);
     }
 
-    uint16_t HilbertCoder::ColorToValue(const Color& col)
+    uint16_t HilbertCoder::ColorToValue(const Color& col, bool shrink/*=true*/)
     {
         int side = 1<<m_SegmentBits;
         MortonCoder m(m_Quantization, m_CurveBits);
-        Color col1 = Shrink(col);
+        Color col1;
+        if (shrink)
+            col1 = Shrink(col);
+        else
+            col1 = col;
         Color currColor;
 
         int fract[3];
@@ -334,9 +358,8 @@ namespace DStream
         TransposeFromHilbertCoords(prevCol);
 
         v1 <<=  m_SegmentBits;
-        for(int i = 0; i < 3; i++) {
+        for(int i = 0; i < 3; i++)
             v1 += fract[i]*sgn(nextCol[i] - prevCol[i]);
-        }
 
         v1 <<= 16 - m_Quantization;
         return v1;
