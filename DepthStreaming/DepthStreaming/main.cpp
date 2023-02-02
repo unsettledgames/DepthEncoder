@@ -18,6 +18,7 @@
 #ifndef _WIN32
 #include <unistd.h>
 #else
+#include <HueCoder.h>
 #include <stdio.h>
 #include <string.h>
 int opterr = 1, optind = 1, optopt, optreset;
@@ -135,81 +136,6 @@ int ParseOptions(int argc, char** argv, string& inputFile, string& outFolder, st
 
     inputFile = argv[optind];
     return 0;
-}
-
-void RemoveNoiseNaive(std::vector<uint16_t>& data, uint32_t width, uint32_t height)
-{
-    for (uint32_t y=0; y<height; y++)
-    {
-        for (uint32_t x=0; x<width; x++)
-        {
-            if (y != 0 && x != 0 && x != (width-1) && y != (height-1))
-            {
-                int current = data[x + y * width];
-                // Get all neighbors
-                std::vector<int> neighbors;
-                neighbors.push_back(data[x+1 + y * width]);
-                neighbors.push_back(data[x-1 + y * width]);
-                neighbors.push_back(data[x + (y+1) * width]);
-                neighbors.push_back(data[x + (y-1) * width]);
-
-                // Compute distance matrix
-                int distanceMatrix[4][4];
-                int outlierThreshold = 1000;
-
-                for (int i=0; i<4; i++)
-                    for (int j=0; j<4; j++)
-                        distanceMatrix[i][j] = std::abs(neighbors[i] - neighbors[j]);
-
-                uint32_t outliers = 0;
-                // Check if there's an outlier
-                for (uint32_t i=0; i<4; i++)
-                    if (distanceMatrix[i][0] > outlierThreshold)
-                        outliers++;
-
-                // Find the right outliers (for each neighbor, return the one with the biggest row + column sum)
-                std::vector<int> outliersIdx;
-
-                for (uint32_t i=0; i<outliers; i++)
-                {
-                    int currOutlier = -1;
-                    int maxSum = -1;
-                    for (uint32_t j=0; j<4; j++)
-                    {
-                        // Compute row + column
-                        int row = 0, col = 0;
-                        for (uint32_t k=0; k<4; k++)
-                        {
-                            row += distanceMatrix[j][k];
-                            col += distanceMatrix[k][j];
-                        }
-
-                        if ((row + col) > maxSum && !std::count(outliersIdx.begin(), outliersIdx.end(), j))
-                        {
-                            currOutlier = j;
-                            maxSum = row + col;
-                        }
-                    }
-                    if (currOutlier != -1)
-                        outliersIdx.push_back(currOutlier);
-                }
-
-                // Compute the average withouit maxIdx
-                float avg = 0; float divisor = 4 - outliersIdx.size();
-                for (uint32_t i=0; i<4; i++)
-                    if (!std::count(outliersIdx.begin(), outliersIdx.end(), i))
-                        avg += neighbors[i];
-                avg /= divisor;
-
-                float err = std::abs(current - avg);
-
-                if (err > 8)
-                    data[x + y*width] = avg;
-                else
-                    data[x + y*width] = current;
-            }
-        }
-    }
 }
 
 void RemoveNoiseMedian(std::vector<uint16_t>& data, uint32_t width, uint32_t height)
@@ -451,6 +377,11 @@ void Encode(string algo, uint16_t* srcData, uint8_t* destData, int quantization,
         TriangleCoder c(quantization);
         c.Encode(srcData, destData, nElements);
     }
+    else if (!algo.compare("HUE"))
+    {
+        HueCoder c(quantization);
+        c.Encode(srcData, destData, nElements);
+    }
 }
 
 void Decode(string algo, uint8_t* srcData, uint16_t* destData, int quantization, int parameter, int nElements)
@@ -486,6 +417,11 @@ void Decode(string algo, uint8_t* srcData, uint16_t* destData, int quantization,
         TriangleCoder c(quantization);
         c.Decode(srcData, destData, nElements);
     }
+    else if (!algo.compare("HUE"))
+    {
+        HueCoder c(quantization);
+        c.Decode(srcData, destData, nElements);
+    }
 }
 
 void AddBenchmarkResult(ofstream& file, string algo, string outFormat, int quantization, int jpegQuality, int parameter, const ErrorData& errData)
@@ -510,7 +446,7 @@ void AddBenchmarkResult(ofstream& file, string algo, string outFormat, int quant
 
 int main(int argc, char *argv[])
 {
-    string algorithms[6] = {"HILBERT", "PACKED", "SPLIT", "TRIANGLE", "PHASE", "MORTON"};
+    string algorithms[7] = {"HUE", "HILBERT", "PACKED", "SPLIT", "TRIANGLE", "PHASE", "MORTON"};
     string outFormats[2] = {"JPG", "PNG"};
 
     string inputFile = "", outFolder = "", algo = "", outFormat = "JPG";
@@ -567,6 +503,19 @@ int main(int argc, char *argv[])
     std::filesystem::path currPathFs;
     folders.push_back(outFolder);
 
+    HueCoder hc(10);
+
+    for (uint32_t i=21952; i<65536; i++)
+    {
+        Color col = hc.ValueToColor(i);
+        uint16_t val = hc.ColorToValue(col);
+        int err = abs((uint16_t)((i >> 6) << 6) - val);
+
+        if (err > 64)
+        {
+            cout << "Err: " << err << ",i: " << i << endl;
+        }
+    }
     /*
     uint32_t q = 14;
     int noiseAmount = 20;
@@ -600,7 +549,7 @@ int main(int argc, char *argv[])
         filesystem::create_directory(currPathFs);
 
         // QUANTIZATION
-        for (uint32_t q=10; q<=maxQuantization; q+=2)
+        for (uint32_t q=minQuantization; q<=maxQuantization; q+=2)
         {
             utilitySs.str("");
             utilitySs << "Quantization" << q;

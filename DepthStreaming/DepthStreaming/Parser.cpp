@@ -1,7 +1,7 @@
 #include <Parser.h>
 #include <iostream>
 
-#include <QFile>
+#include <filesystem>
 
 namespace DStream
 {
@@ -22,7 +22,7 @@ namespace DStream
 
     uint16_t* Parser::ParseASC(DepthmapData& dmData)
     {
-        if (!QFile::exists(QString(m_InputPath.c_str())))
+        if (!std::filesystem::exists(m_InputPath))
         {
             std::cerr << "File " << m_InputPath << " does not exist" << std::endl;
             return nullptr;

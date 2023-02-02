@@ -1,7 +1,6 @@
 #include <PhaseCoder.h>
 #include <cmath>
 #include <algorithm>
-// Credits for Morton convertions: https://github.com/davemc0/DMcTools/blob/main/Math/SpaceFillCurve.h
 
 namespace DStream
 {

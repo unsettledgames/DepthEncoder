@@ -6,8 +6,6 @@
 #include <assert.h>
 #include <iostream>
 
-using namespace std;
-
 namespace DStream
 {
     template <typename T>
@@ -77,7 +75,6 @@ namespace DStream
                 m_Table[i][j] = new uint16_t[side];
         }
 
-
         for (uint16_t i=0; i<side; i++)
         {
             for (uint16_t j=0; j<side; j++)
@@ -89,15 +86,7 @@ namespace DStream
                 }
             }
         }
-        /*
-        cout << "Table" << endl;
-        for (uint32_t i=1; i<side; i++)
-        {
-            for (uint32_t j=0; j<side; j++)
-                cout << m_Table[0][i][j] << ",";
-            cout << endl;
-        }
-*/
+
         m_XErrors.resize(side-1);
         // Init error vectors
         for (uint32_t k=0; k<side-1; k++)
@@ -141,7 +130,6 @@ namespace DStream
         for (uint32_t e=0; e<3; e++)
         {
             uint32_t nextNumber=0;
-            uint32_t errorSum = 0;
 
             TransposeAdvanceToRange(errors[e], 256);
             RemoveZerosFromAdvance(errors[e]);

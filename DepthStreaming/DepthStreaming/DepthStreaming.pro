@@ -14,6 +14,7 @@ linux:LIBS += -ljpeg
 
 SOURCES += \
         HilbertCoder.cpp \
+        HueCoder.cpp \
         MortonCoder.cpp \
         PackedCoder.cpp \
         Parser.cpp \
@@ -33,6 +34,7 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 HEADERS += \
     Algorithm.h \
     HilbertCoder.h \
+    HueCoder.h \
     MortonCoder.h \
     PackedCoder.h \
     Parser.h \
